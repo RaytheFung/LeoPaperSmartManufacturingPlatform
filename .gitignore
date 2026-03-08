@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual env / Conda / local runtimes
+.venv/
+venv/
+env/
+.conda/
+conda/
+.conda311/
+conda311/
+.miniforge/
+miniforge/
+
+# Local app / editor settings
+.vscode/
+.streamlit/
+.installer_cache/
+
+# Python version file
+.python-version
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated outputs
+etl_outputs/
+
+# Large raw data folders
+2025 DataSet(JAN to JUN)/
+
+# Raw spreadsheets inside data/
+data/*.xlsx
+data/*.xls

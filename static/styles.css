@@ -1,0 +1,134 @@
+/* Smart Manufacturing Platform - Centralized Styles */
+
+/* Prevent text truncation in tables */
+[data-testid="stDataFrame"] {
+    font-size: 14px;
+}
+
+[data-testid="stDataFrame"] td {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    max-width: none !important;
+    word-wrap: break-word;
+}
+
+[data-testid="stDataFrame"] th {
+    white-space: normal !important;
+    text-align: center !important;
+}
+
+/* Ensure full width for dataframe cells */
+.dataframe td, .dataframe th {
+    min-width: 100px;
+    padding: 8px 12px !important;
+}
+
+/* Better metric display with responsive sizing */
+[data-testid="metric-container"] {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #e1e4e8;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    margin-bottom: 10px;
+}
+
+[data-testid="metric-container"] > div {
+    white-space: normal !important;
+    overflow: visible !important;
+}
+
+[data-testid="metric-container"] label {
+    font-size: 14px !important;
+    font-weight: 600;
+    color: #555;
+}
+
+[data-testid="metric-container"] [data-testid="metric-value"] {
+    font-size: 20px !important;
+    font-weight: bold;
+    white-space: normal !important;
+    word-break: break-word;
+}
+
+/* Improve button styling */
+.stButton > button {
+    width: 100%;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Tab styling with better spacing */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 20px;
+    padding: 10px 0;
+    border-bottom: 2px solid #e1e4e8;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 8px 8px 0 0;
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background-color: #f0f7ff;
+}
+
+/* Expander styling for better visibility */
+.streamlit-expanderHeader {
+    font-size: 15px;
+    font-weight: 600;
+    background-color: #f0f7ff;
+    border-radius: 10px;
+    padding: 14px 18px;
+    border: 1px solid #d4e3f4;
+    transition: background-color 0.2s ease;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: #e1f0ff;
+}
+
+/* Better column spacing */
+[data-testid="column"] {
+    padding: 0 10px;
+}
+
+/* Info/Warning/Success boxes styling */
+.stAlert {
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+/* Progress bar styling */
+.stProgress > div > div {
+    background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+    border-radius: 10px;
+}
+
+/* Headers spacing */
+h1, h2, h3, h4 {
+    margin-top: 20px;
+    margin-bottom: 15px;
+}
+
+/* Container padding */
+.main > div {
+    padding: 20px;
+}
+
+/* Selectbox and input styling */
+.stSelectbox > div > div, .stSlider > div > div {
+    border-radius: 8px;
+}
