@@ -4,7 +4,6 @@ Manufacturing Data Processing Script for January to June 2025
 Processes all monthly data files using the existing ETL pipeline in chronological order.
 """
 
-import os
 import sys
 import pandas as pd
 import json
@@ -12,25 +11,43 @@ from pathlib import Path
 from datetime import datetime
 import sqlite3
 
-# Add the parent directory to Python path to import local modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-# Import the existing ETL solution and module
 from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
+from core.runtime_paths import (
+    get_csi_dataset_dir,
+    get_energy_dataset_dir,
+    get_etl_outputs_dir,
+    get_raw_dataset_root,
+    get_repo_root,
+    get_database_path,
+    get_mes_dataset_dir,
+)
 from modules.etl_module import ETLPipelineModule
 
+
+DEFAULT_DATA_ROOT = get_raw_dataset_root()
+DEFAULT_OUTPUT_DIR = get_etl_outputs_dir()
+DEFAULT_SUMMARY_DIR = DEFAULT_OUTPUT_DIR / "summaries"
+
 class ManufacturingDataProcessor:
-    def __init__(self, data_root_path):
+    def __init__(self, data_root_path, output_dir=DEFAULT_OUTPUT_DIR, summary_dir=DEFAULT_SUMMARY_DIR):
         """
         Initialize the processor with data root path
         
         Args:
-            data_root_path: Root path to the 2025 DataSet(JAN to JUN) directory
+            data_root_path: Root path to the source_data/2025_jan_jun_initial directory
         """
         self.data_root_path = Path(data_root_path)
-        self.energy_dir = self.data_root_path / "Energy Usage 1hr Interval(JAN to JUN)"
-        self.csi_dir = self.data_root_path / "CSI Monthly(JAN to JUN)"
-        self.mes_dir = self.data_root_path / "MES Monthly(JAN to JUN)"
+        self.output_dir = Path(output_dir)
+        self.summary_dir = Path(summary_dir)
+        self.energy_dir = get_energy_dataset_dir(self.data_root_path)
+        self.csi_dir = get_csi_dataset_dir(self.data_root_path)
+        self.mes_dir = get_mes_dataset_dir(self.data_root_path)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.summary_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize ETL components
         self.etl_pipeline = ETLPipelineModule()
@@ -242,11 +259,11 @@ class ManufacturingDataProcessor:
             
             # Generate reports
             print("4. Generating reports...")
-            report_filename = f"{month.lower()}_{year}_etl_report.xlsx"
-            etl.generate_enhanced_report(report_filename)
+            report_filename = self.output_dir / f"{month.lower()}_{year}_etl_report.xlsx"
+            etl.generate_enhanced_report(str(report_filename))
             
             # Save mapping results as JSON
-            json_filename = f"{month.lower()}_{year}_etl_report_mappings.json"
+            json_filename = self.output_dir / f"{month.lower()}_{year}_etl_report_mappings.json"
             with open(json_filename, 'w', encoding='utf-8') as f:
                 # Convert numpy types to native Python types for JSON serialization
                 serializable_results = self._convert_to_serializable(mapping_results)
@@ -258,8 +275,8 @@ class ManufacturingDataProcessor:
             print(f"   - Energy records: {stats['energy_original_rows']:,}")
             print(f"   - Three-way matches: {stats['three_way_matches']}")
             print(f"   - MES coverage: {stats['mes_coverage_percent']}")
-            print(f"   - Excel report: {report_filename}")
-            print(f"   - JSON mappings: {json_filename}")
+            print(f"   - Excel report: {report_filename.relative_to(get_repo_root())}")
+            print(f"   - JSON mappings: {json_filename.relative_to(get_repo_root())}")
             
             return mapping_results, etl
             
@@ -384,9 +401,9 @@ class ManufacturingDataProcessor:
         
         # Generate summary CSV
         summary_df = pd.DataFrame(results_summary)
-        summary_filename = f"processing_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        summary_filename = self.summary_dir / f"processing_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         summary_df.to_csv(summary_filename, index=False)
-        print(f"\n📊 Processing summary saved to: {summary_filename}")
+        print(f"\n📊 Processing summary saved to: {summary_filename.relative_to(get_repo_root())}")
     
     def get_database_summary(self):
         """Get summary of all processed data from database"""
@@ -439,8 +456,7 @@ class ManufacturingDataProcessor:
 
 def main():
     """Main execution function"""
-    # Define the data root path
-    data_root_path = "/Users/rayfung/Documents/VCC/LeoPaper/2025 DataSet(JAN to JUN)"
+    data_root_path = DEFAULT_DATA_ROOT
     
     # Initialize processor
     processor = ManufacturingDataProcessor(data_root_path)
@@ -448,6 +464,8 @@ def main():
     print("MANUFACTURING DATA PROCESSOR")
     print("Processing January to June 2025 data")
     print(f"Data source: {data_root_path}")
+    print(f"ETL outputs: {DEFAULT_OUTPUT_DIR}")
+    print(f"Database: {get_database_path()}")
     
     # Step 1: List all files
     processor.list_all_files()
@@ -465,9 +483,9 @@ def main():
     print("PROCESSING COMPLETE!")
     print("="*80)
     print("Check the generated files:")
-    print("- Excel reports: *_etl_report.xlsx")
-    print("- JSON mappings: *_etl_report_mappings.json")
-    print("- Processing summary: processing_summary_*.csv")
+    print("- Excel reports: etl_outputs/*_etl_report.xlsx")
+    print("- JSON mappings: etl_outputs/*_etl_report_mappings.json")
+    print("- Processing summary: etl_outputs/summaries/processing_summary_*.csv")
     print("- Database: manufacturing_data.db")
 
 

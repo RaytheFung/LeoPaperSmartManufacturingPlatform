@@ -1,225 +1,108 @@
-# 🏭 Smart Manufacturing ETL + ML Platform
+# Smart Manufacturing ETL + ML Platform
 
-Transform 5+ hours of manual Excel work into 5-minute automated insights!
-This Streamlit application integrates Energy, CSI, and MES systems for intelligent manufacturing optimization.
+Streamlit app for monthly manufacturing ETL, unified-view generation, maintenance analysis, ML-assisted efficiency prediction, and optimization insights.
 
-## 🚀 Features
+## Current Working Set
 
-- **ETL Pipeline**: Automated data extraction and machine matching across three systems
-- **Energy Analysis**: Detailed energy attribution and efficiency tracking
-- **Production Optimization**: Material transition analysis, intelligent scheduling, and team insights
-- **ML-Ready**: Prepared infrastructure for predictive analytics (Stage 3)
+Primary runtime files:
+- `app.py` - Streamlit entry point
+- `modules/` - page modules used by the app
+- `core/` - ETL, ML, maintenance, and UI logic
+- `CURRENT_REBUILD_STATUS.md` - current rebuild ledger and recommended next step
+- `manufacturing_data.db` - local SQLite data store used by the app; kept out of GitHub because the active DB is too large for normal Git/Git LFS hosting
+- `models/` - trained model and preprocessing bundle
+- `data/` - current sample input files used by the lightweight June demo path
+- `source_data/2025_jan_jun_initial/` - raw historical Jan-Jun 2025 source files used by batch ETL
+- `source_data/2025_jul_2026_feb_collected/` - raw Jul 2025-Feb 2026 extension source package, with grouped energy files through Mar 2026
+- `etl_outputs/` - generated ETL reports, mappings, summaries, and cache files; ignored except for its guide/placeholder
+- `scripts/bootstrap_py311_and_run.sh` - recommended launcher on macOS
+- `scripts/process_jan_to_june_2025.py` - batch ETL rebuild for Jan-Jun 2025
+- `project_context.md` - current architecture/status note
 
-## 📋 Prerequisites
+Generated or local-only files:
+- `.conda311/`, `.miniforge/`, `.venv/` - local Python environments
+- `.streamlit/server.log`, `.streamlit/server.pid` - runtime files
+- `manufacturing_data.db`, `*.db`, `*.sqlite*` - local runtime database artifacts; rebuild or transfer separately when a full runtime snapshot is needed
+- generated `etl_outputs/*` files - recreated by ETL scripts when needed
+- local diagnostic/output holding folder: `/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform_repo_holding_20260404/local_runtime_clutter/`
+  - `artifacts/` - Task-run SQLite backups, working copies, probes, and diagnostics moved outside the repo
+  - `backups/` - historical SQLite rollback/backup files moved outside the repo
+- `__pycache__/`, `.DS_Store`, `~$*.xlsx` - disposable noise
 
-- Python 3.8 or higher
-- pip (Python package installer)
+Historical or project-artifact docs have been moved outside the repo into:
+- `/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform_repo_holding_20260404/`
 
-## 🛠️ Installation
+## Run The App
 
-1. Navigate to the app directory:
-```bash
-cd smart_manufacturing_app
-```
+Recommended on macOS:
 
-2. Install required packages:
-```bash
-pip install -r requirements.txt
-```
-
-## 🏃 Running the Application
-
-Quick launch (recommended)
 ```bash
 bash scripts/bootstrap_py311_and_run.sh
 ```
+
 Then open:
-```
+
+```text
 http://localhost:8502
 ```
 
-Alternative
-```bash
-streamlit run app.py
-```
-(The app is configured to use port 8502 via `.streamlit/config.toml`.)
-
-## 📊 Application Pages
-
-### 🏠 Overview
-- Key metrics dashboard
-- Energy attribution pie chart
-- Daily production trends
-
-### 🔄 ETL Pipeline
-- Data volume statistics
-- Machine matching results
-- Three-way matches table
-
-### 📊 Unified View
-- Hourly integrated data
-- Feature statistics
-- Data quality metrics
-
-### ⚡ Energy Analysis
-- Energy usage patterns over time
-- Machine efficiency rankings
-- Hourly consumption patterns
-
-### 📈 ML Predictions
-- Trains & serves the production-efficiency RandomForest model (R² ≈ 0.75)
-- Live scoring with driver insights and confidence bands
-- Logs recommended maintenance actions to `ml_action_log`
-
-### 🎯 Optimization
-- Live production predictions with driver narratives
-- Intelligent production scheduling with estimated savings
-- Team × Task insights and maintenance hotspots
-
-## 📁 Project Structure
-
-```
-smart_manufacturing_app/
-│
-├── 📱 app.py                    # Main Streamlit application
-├── 🗄️ manufacturing_data.db     # SQLite database with all processed data
-├── 📋 requirements.txt          # Python dependencies
-├── 🚀 run_app.sh               # Shell script to run the application
-│
-├── 📂 modules/                  # Core application modules
-│   ├── etl_module.py           # ETL processing with UI
-│   ├── unified_view_module.py  # Unified view with speed-based allocation
-│   ├── euvg_module.py          # Energy Usage Visualization Grid
-│   ├── ml_module.py            # Machine Learning module
-│   └── overview_module.py      # System overview module
-│
-├── 📂 core/                     # Core business logic
-│   ├── enhanced_etl_solution_CURRENT.py  # ETL processing engine
-│   └── utils.py                # Utility functions
-│
-├── 📂 scripts/                  # Batch processing scripts
-│   └── process_jan_to_june_2025.py  # Historical data processing
-│
-├── 📂 data/                     # Sample data files
-│   ├── CSI印刷心電圖報表June.xlsx
-│   ├── MES生產數據JunePrinter.xlsx
-│   └── 能耗、費用報表June(1-30).xlsx
-│
-├── 📂 etl_outputs/              # ETL processing results
-│   ├── [month]_2025_etl_report.xlsx     # Monthly ETL reports
-│   ├── [month]_2025_etl_report_mappings.json
-│   └── old_versions/           # Archived older ETL reports
-│
-├── 📂 docs/                     # Documentation
-│   ├── CLAUDE.md               # AI assistant context
-│   └── [other documentation]
-│
-├── 📂 backups/                  # Database backups
-│   └── unified_view_backup.db
-│
-├── 📂 archived_files/           # Archived/deprecated files
-│   ├── test_scripts/           # Development & test scripts
-│   └── old_reports/            # Old report versions
-│
-└── 📂 temp_uploads/            # Temporary file uploads
-```
-
-## 🔧 Configuration
-
-The app uses June 2025 data by default. To use different data:
-
-1. Place your data files in the `data/` folder
-2. Update file paths in `app.py` (lines 44-47)
-3. Ensure files follow the same format as sample data
-
-## 📈 Data Requirements
-
-### Energy Data (Excel)
-- Skip first 6 rows
-- Columns: machine, datetime, electricity_kwh, electricity_cost
-
-### CSI Data (Excel)
-- Machine ID column: 機台編號
-- Production columns: 開始時間, 結束時間, 正品數量
-- Team columns: 機長姓名1, 機組人員姓名1-4
-
-### MES Data (Excel)
-- Resource column: 資源
-- Order column: 作業
-- Status and task information
-
-## 🚨 Troubleshooting
-
-### macOS segfault when launching Streamlit
-- Symptom: `Segmentation fault: 11` when importing `streamlit`, `numpy`, etc.
-- Fix: Use the provided Python 3.11 environment.
-  - Run: `bash scripts/bootstrap_py311_and_run.sh`
-  - Or manually: `.conda311/bin/streamlit run app.py --server.port 8502 --server.address 0.0.0.0`
-
-### "Failed to load data" error
-- Check all data files exist in the `data/` folder
-- Verify file formats match expected structure
-- Ensure file paths are correct
-
-### Slow performance
-- The initial data load is cached
-- Clearing Streamlit cache (`st.cache_data.clear()`) can recover from corrupted states
-
-## ✅ Verification Checklist
-
-Run these commands after updating data or code to ensure the intelligent pipeline is healthy:
+Alternative if the local Python 3.11 env already exists:
 
 ```bash
-# 1. Regenerate unified view (if ETL inputs changed)
+.conda311/bin/streamlit run app.py --server.port 8502 --server.address 0.0.0.0 --server.headless true
+```
+
+Stop the app:
+
+```bash
+pkill -f "streamlit run app.py"
+```
+
+## Verify Core Workflows
+
+Rebuild Jan-Jun ETL artifacts:
+
+```bash
 python3 scripts/process_jan_to_june_2025.py
+```
 
-# 2. Retrain and persist the production-efficiency model
+Retrain the model:
+
+```bash
 python3 core/ml_trainer.py
+```
 
-# 3. Smoke-test inference + ROI helpers
+Smoke-test inference:
+
+```bash
 python3 core/ml_predictor.py
+```
 
-# 4. Quick dataset sanity check
+Check unified-view coverage:
+
+```bash
 sqlite3 manufacturing_data.db "SELECT month_year, COUNT(*), AVG(kwh_per_unit) FROM unified_view GROUP BY month_year;"
 ```
 
-Run `streamlit run app.py` (or `bash scripts/bootstrap_py311_and_run.sh`) afterward to interact with the updated dashboards, ML recommendations, and maintenance action log.
-- Subsequent page changes should be fast
-- Clear cache with 'c' then 'Clear cache' in Streamlit menu
+## Tests
 
-### Missing features
-- Some features require complete data
-- Check console for specific error messages
+Automated unit tests currently worth keeping in the main test path:
 
-## 🔮 Future Enhancements (Stage 3 & 4)
-
-- [ ] Energy consumption forecasting
-- [ ] Anomaly detection algorithms
-- [ ] Predictive maintenance alerts
-- [ ] Real-time data integration
-- [ ] API endpoints for external systems
-- [ ] Cloud deployment
-
-## 📞 Support
-
-For issues or questions:
-1. Check the troubleshooting section
-2. Review data format requirements
-3. Ensure all dependencies are installed
-
-## 🎯 Quick Start Example
-
-```python
-# After installation, simply run:
-streamlit run app.py
-
-# The app will:
-# 1. Load and process June manufacturing data
-# 2. Create machine mappings across systems
-# 3. Generate hourly unified view
-# 4. Display interactive analytics dashboard
+```bash
+python3 -m unittest tests.test_etl_modules tests.test_euvg_stage3
 ```
 
----
+Manual verification scripts live under `tests/manual_checks/`.
 
-**Note**: This application processes sensitive manufacturing data. Ensure proper access controls when deploying in production environments.
+## Notes
+
+- `project_context.md` is the best high-level description of the current system.
+- `docs/DOCS_GUIDE.md` is the docs-folder guide only; use it when you want the shortest path to current documentation.
+- `docs/technical/REBUILD_DOCS_INDEX.md` groups rebuild docs into static design docs, task reports, and historical handoff docs.
+- Folder-specific guides use explicit names to stay readable in the file explorer:
+  - `source_data/SOURCE_DATA_GUIDE.md`
+  - `source_data/2025_jan_jun_initial/INITIAL_SOURCE_SCOPE.md`
+  - `source_data/2025_jul_2026_feb_collected/EXTENDED_SOURCE_SCOPE.md`
+  - `etl_outputs/ETL_OUTPUTS_GUIDE.md`
+  - `tests/TESTS_GUIDE.md`
+- `run_app.sh` exists, but the Python 3.11 bootstrap path is the safer default on macOS.

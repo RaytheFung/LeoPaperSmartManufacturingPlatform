@@ -29,6 +29,14 @@ class MachineMapper:
         self.energy_aggregated: Optional[pd.DataFrame] = None
         self.partial_matches: Dict[str, List[Dict]] = {}
 
+    @staticmethod
+    def _prefer_canonical_machine_id(df: pd.DataFrame, fallback: pd.Series) -> pd.Series:
+        if 'canonical_machine_id' not in df.columns:
+            return fallback
+
+        canonical = df['canonical_machine_id'].fillna('').astype(str).str.strip()
+        return canonical.where(canonical != '', fallback)
+
     # ------------------------------------------------------------------
     # Pattern helpers
     # ------------------------------------------------------------------
@@ -92,8 +100,12 @@ class MachineMapper:
         print("\n=== AGGREGATING ENERGY DATA TO MACHINE LEVEL ===")
         print(f"Original energy rows: {len(self.energy_df)}")
 
-        self.energy_df['pattern'], self.energy_df['component'] = zip(
+        extracted_patterns, self.energy_df['component'] = zip(
             *self.energy_df['machine'].apply(self.extract_machine_pattern)
+        )
+        self.energy_df['pattern'] = self._prefer_canonical_machine_id(
+            self.energy_df,
+            pd.Series(extracted_patterns, index=self.energy_df.index),
         )
 
         valid_energy = self.energy_df[self.energy_df['pattern'].notna()].copy()
@@ -198,13 +210,15 @@ class MachineMapper:
     def create_mapping(self) -> MappingResult:
         aggregated = self.energy_aggregated if self.energy_aggregated is not None else self.aggregate_energy()
 
-        def _normalized_series(series: pd.Series) -> pd.Series:
+        def _normalized_series(df: pd.DataFrame, column_name: str) -> pd.Series:
+            series = df[column_name]
             patterns = [self.extract_machine_pattern(x)[0] for x in series]
-            return pd.Series(patterns, index=series.index)
+            fallback = pd.Series(patterns, index=series.index)
+            return self._prefer_canonical_machine_id(df, fallback)
 
-        self.csi_df['_pattern'] = _normalized_series(self.csi_df['機台編號'])
+        self.csi_df['_pattern'] = _normalized_series(self.csi_df, '機台編號')
         if '資源' in self.mes_df.columns:
-            self.mes_df['_pattern'] = _normalized_series(self.mes_df['資源'])
+            self.mes_df['_pattern'] = _normalized_series(self.mes_df, '資源')
         else:
             self.mes_df['_pattern'] = pd.Series([None] * len(self.mes_df))
 

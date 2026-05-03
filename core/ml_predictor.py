@@ -11,9 +11,17 @@ from datetime import datetime, timedelta
 import os
 from pathlib import Path
 
+from core.runtime_paths import get_database_path
+
 
 class MLPredictor:
-    """Make predictions using trained models"""
+    """Make predictions using trained models.
+
+    The defended-core routed ML and Optimization pages use `predict_efficiency()`
+    with the active saved artifacts only. Legacy `unified_view` lookup helpers
+    remain for backward-safe compatibility surfaces and are not part of the
+    current defended-core route contract.
+    """
     
     def __init__(self,
                  model_path='models/production_efficiency_model.pkl',
@@ -85,14 +93,41 @@ class MLPredictor:
             self.feature_columns = None
             self.scaler = None
 
+    @staticmethod
+    def _clean_text(value):
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _feature_default(self, label, fallback=0.0):
+        value = self.feature_defaults.get(label) if isinstance(self.feature_defaults, dict) else None
+        try:
+            if value is None or pd.isna(value):
+                raise ValueError
+            return float(value)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    def _feature_default_int(self, label, fallback=0):
+        return int(round(self._feature_default(label, fallback)))
+
     def predict_efficiency(self, machine_id, team_leader, material_code, 
-                          hours_since_maintenance, task_difficulty='中',
+                          hours_since_maintenance, task_difficulty=None,
                           production_qty=None, team_size=None,
                           hour_of_day=None, is_weekend=None, month=None,
-                          last_maintenance_type='PM',
+                          last_maintenance_type=None,
                           maintenance_intensity_30d=None,
                           cumulative_maintenance_count=None):
         """Predict efficiency for given parameters with robust error handling"""
+
+        machine_id = self._clean_text(machine_id)
+        team_leader = self._clean_text(team_leader) or 'unknown'
+        material_code = self._clean_text(material_code) or 'unknown'
+        last_maintenance_type = self._clean_text(last_maintenance_type) or 'unknown'
+        task_difficulty = self._clean_text(task_difficulty)
+        if hours_since_maintenance is None:
+            hours_since_maintenance = self._feature_default('hours_since_last_maintenance', 0.0)
         
         if self.model is None or self.scaler is None or self.feature_columns is None:
             print("Warning: Model or preprocessor missing; using simulation fallback")
@@ -108,16 +143,6 @@ class MLPredictor:
             }
 
         # by this line, model and preprocessor are present
-
-        # Validate inputs
-        if machine_id is None or machine_id == '':
-            machine_id = '024-001'  # Default machine
-        if team_leader is None or team_leader == '':
-            team_leader = 'Default'
-        if material_code is None or material_code == '':
-            material_code = 'DEFAULT'
-        if hours_since_maintenance is None:
-            hours_since_maintenance = 100
 
         # Defaults for optional parameters
         now = datetime.now()
@@ -138,13 +163,13 @@ class MLPredictor:
         is_weekend = weekend_flag
         
         if team_size is None:
-            team_size = int(self.feature_defaults.get('team_size', 3))
+            team_size = self._feature_default('team_size', 0.0)
         if production_qty is None:
-            production_qty = float(self.feature_defaults.get('production_qty', 1000.0))
+            production_qty = self._feature_default('production_qty', self.min_production)
         if maintenance_intensity_30d is None:
-            maintenance_intensity_30d = float(self.feature_defaults.get('maintenance_intensity_30d', 0))
+            maintenance_intensity_30d = self._feature_default('maintenance_intensity_30d', 0.0)
         if cumulative_maintenance_count is None:
-            cumulative_maintenance_count = float(self.feature_defaults.get('cumulative_maintenance_count', 0))
+            cumulative_maintenance_count = self._feature_default('cumulative_maintenance_count', 0.0)
 
         # Create feature vector
         try:
@@ -192,8 +217,9 @@ class MLPredictor:
                     hours_since_maintenance, task_difficulty
                 )
                 source = 'fallback'
-            # If wildly out of range, prefer simulation over blind clipping
-            if prediction < 0.3 or prediction > 20:
+            # Canonical kWh/unit can be materially below 0.3 on real data, so only
+            # reject negative values or outputs above the configured upper bound.
+            if prediction < 0 or prediction > self.max_kwh_per_unit:
                 print(f"Out-of-range prediction {prediction:.3f}; switching to fallback simulation")
                 prediction = self._simulate_prediction(
                     machine_id, team_leader, material_code,
@@ -201,7 +227,7 @@ class MLPredictor:
                 )
                 source = 'fallback'
             # Clip to presentation range
-            prediction = float(np.clip(prediction, 0.3, 10.0))
+            prediction = float(np.clip(prediction, 0.0, self.max_kwh_per_unit))
             
             # Calculate confidence (simplified - based on similar historical data)
             confidence = self._calculate_confidence(features)
@@ -243,21 +269,32 @@ class MLPredictor:
         if self.feature_columns is None:
             raise ValueError("Preprocessing metadata not loaded")
 
-        # Parse machine ID
-        if '-' in machine_id:
-            parts = machine_id.split('-')
-            machine_type_str = parts[0]
+        machine_id = self._clean_text(machine_id)
+        team_leader = self._clean_text(team_leader) or 'unknown'
+        material_code = self._clean_text(material_code) or 'unknown'
+        last_maintenance_type = self._clean_text(last_maintenance_type) or 'unknown'
+        task_difficulty = self._clean_text(task_difficulty)
+
+        # Parse machine ID without fabricating a real machine family.
+        machine_type_str = 'unknown'
+        machine_number = self._feature_default_int('machine_number', 1)
+        if machine_id and '-' in machine_id:
+            parts = machine_id.split('-', 1)
+            machine_type_str = self._clean_text(parts[0]) or 'unknown'
             try:
-                machine_number = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-            except:
-                machine_number = 1
-        else:
-            machine_type_str = '024'
-            machine_number = 1
+                if len(parts) > 1 and parts[1].isdigit():
+                    machine_number = int(parts[1])
+            except Exception:
+                machine_number = self._feature_default_int('machine_number', 1)
+        elif machine_id and machine_id.isdigit():
+            machine_type_str = machine_id
         
         task_complexity_map = {'易': 1, '中': 2, '難': 3,
                                 'Easy': 1, 'Medium': 2, 'Hard': 3}
-        task_complexity = task_complexity_map.get(task_difficulty, 2)
+        task_complexity = task_complexity_map.get(
+            task_difficulty,
+            self._feature_default('task_complexity', 2.0),
+        )
 
         is_night_shift = 1 if hour_of_day >= 20 or hour_of_day < 7 else 0
         maintenance_urgency = float(hours_since_maintenance) / 720.0
@@ -335,7 +372,14 @@ class MLPredictor:
             maintenance_impact = 1.2  # Very inefficient when overdue
         
         # Task difficulty impact (significant)
-        difficulty_map = {'易': -0.4, '中': 0, '難': 0.5}
+        difficulty_map = {
+            '易': -0.4,
+            'Easy': -0.4,
+            '中': 0,
+            'Medium': 0,
+            '難': 0.5,
+            'Hard': 0.5,
+        }
         difficulty_impact = difficulty_map.get(task_difficulty, 0)
         
         # Team leader impact (noticeable)
@@ -432,29 +476,44 @@ class MLPredictor:
 
         return impacts
 
+    def _legacy_lookup_db_path(self) -> Path:
+        """Return the repo-local DB used by dormant legacy lookup helpers."""
+
+        return get_database_path()
+
+    def _open_legacy_unified_view_connection(self):
+        """Open the repo-local DB for legacy `unified_view` compatibility helpers."""
+
+        return sqlite3.connect(str(self._legacy_lookup_db_path()))
+
     def _fetch_distinct(self, column, limit=100):
         query = f"SELECT DISTINCT {column} FROM unified_view WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY {column} LIMIT {limit}"
         try:
-            conn = sqlite3.connect('manufacturing_data.db')
-            rows = conn.execute(query).fetchall()
-            conn.close()
+            with self._open_legacy_unified_view_connection() as conn:
+                rows = conn.execute(query).fetchall()
             return [row[0] for row in rows if row[0]]
         except Exception:
             return []
 
     def get_machine_list(self):
+        """Legacy compatibility helper backed by `unified_view` when available."""
+
         machines = self._fetch_distinct('machine_id', limit=200)
         if not machines:
             machines = ['024-060', '024-073', '024-091']
         return machines
 
     def get_team_leaders(self):
+        """Legacy compatibility helper backed by `unified_view` when available."""
+
         leaders = self._fetch_distinct('team_leader', limit=200)
         if not leaders:
             leaders = ['Default', 'Team A', 'Team B']
         return leaders
 
     def get_material_codes(self):
+        """Legacy compatibility helper backed by `unified_view` when available."""
+
         materials = self._fetch_distinct('material_code', limit=200)
         if not materials:
             materials = ['DEFAULT', 'MAT001', 'MAT002']
@@ -495,11 +554,10 @@ class MLPredictor:
 
     def _get_baseline_efficiency(self):
         try:
-            conn = sqlite3.connect('manufacturing_data.db')
-            value = conn.execute(
-                "SELECT AVG(kwh_per_unit) FROM unified_view WHERE kwh_per_unit > 0 AND kwh_per_unit < 20"
-            ).fetchone()[0]
-            conn.close()
+            with self._open_legacy_unified_view_connection() as conn:
+                value = conn.execute(
+                    "SELECT AVG(kwh_per_unit) FROM unified_view WHERE kwh_per_unit > 0 AND kwh_per_unit < 20"
+                ).fetchone()[0]
             return value if value else 0.12
         except Exception:
             return 0.12
@@ -513,43 +571,40 @@ class MLPredictor:
         predictions = []
         
         for _, row in machines_df.iterrows():
-            pred, conf = self.predict_efficiency(
+            prediction = self.predict_efficiency(
                 row['machine_id'],
-                row.get('team_leader', 'default'),
-                row.get('material_code', 'default'),
+                row.get('team_leader', None),
+                row.get('material_code', None),
                 row.get('hours_since_last_maintenance', 500),
-                row.get('task_difficulty', '中')
+                row.get('task_difficulty', None)
             )
             
-            if pred is not None:
+            if prediction.get('efficiency') is not None:
                 predictions.append({
                     'machine_id': row['machine_id'],
-                    'predicted_efficiency': pred,
-                    'confidence': conf,
+                    'predicted_efficiency': prediction['efficiency'],
+                    'confidence': prediction['confidence'],
+                    'source': prediction.get('source', 'model'),
                     'timestamp': datetime.now()
                 })
         
         return pd.DataFrame(predictions)
     
     def get_optimization_recommendations(self, machine_id):
-        """Generate specific recommendations for a machine"""
-        
-        conn = sqlite3.connect('manufacturing_data.db')
-        
-        # Get machine history
-        history = pd.read_sql_query("""
-            SELECT 
-                AVG(kwh_per_unit) as avg_efficiency,
-                AVG(hours_since_last_maintenance) as avg_maintenance_hours,
-                COUNT(DISTINCT team_leader) as team_variety,
-                COUNT(DISTINCT material_code) as material_variety
-            FROM unified_view
-            WHERE machine_id = ?
-            AND datetime >= datetime('now', '-30 days')
-        """, conn, params=(machine_id,))
-        
-        conn.close()
-        
+        """Legacy compatibility helper for dormant `unified_view` recommendation flows."""
+
+        with self._open_legacy_unified_view_connection() as conn:
+            history = pd.read_sql_query("""
+                SELECT
+                    AVG(kwh_per_unit) as avg_efficiency,
+                    AVG(hours_since_last_maintenance) as avg_maintenance_hours,
+                    COUNT(DISTINCT team_leader) as team_variety,
+                    COUNT(DISTINCT material_code) as material_variety
+                FROM unified_view
+                WHERE machine_id = ?
+                AND datetime >= datetime('now', '-30 days')
+            """, conn, params=(machine_id,))
+
         recommendations = []
         
         if len(history) > 0 and history.iloc[0]['avg_efficiency'] is not None:
@@ -703,12 +758,12 @@ def quick_predict(machine_id, hours_since_maintenance=500):
     # Make prediction
     result = predictor.predict_efficiency(
         machine_id=machine_id,
-        team_leader='default',
-        material_code='DEFAULT',
+        team_leader=None,
+        material_code=None,
         hours_since_maintenance=hours_since_maintenance,
-        production_qty=1000,
-        team_size=3,
-        task_difficulty='Medium'
+        production_qty=None,
+        team_size=None,
+        task_difficulty=None
     )
     efficiency = result['efficiency']
     confidence = result['confidence']

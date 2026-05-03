@@ -1,1097 +1,1224 @@
 """
-Machine Learning Module for Smart Manufacturing Platform - FIXED VERSION
-Interactive dashboard for model training, prediction, and ROI analysis
-Uses real cost data: 704 RMB/hour oil + 663 RMB/hour machine = 1,367 RMB/hour total
+Canonical ML page backed by fact_machine_hour.
 """
 
-import streamlit as st
+from __future__ import annotations
+
+from pathlib import Path
+
 import pandas as pd
-import numpy as np
-import sqlite3
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import os
-import sys
-import pickle
+import streamlit as st
 
-# Add parent directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'core'))
-
-# Try importing ML modules
-try:
-    from ml_trainer import MLDataPreparer, MLModelTrainer, train_production_model
-    from ml_predictor import MLPredictor, ROICalculator, quick_predict
-    ML_MODULES_AVAILABLE = True
-except ImportError as e:
-    ML_MODULES_AVAILABLE = False
-    print(f"ML modules not available: {e}")
-
-# Import shared components
-try:
-    from .shared_ml_components import (
-        render_live_predictions_tab, 
-        render_feature_insights_tab, 
-        render_recommendations_tab
-    )
-except ImportError:
-    # Fallback for direct execution
-    from shared_ml_components import (
-        render_live_predictions_tab, 
-        render_feature_insights_tab, 
-        render_recommendations_tab
-    )
+from core.maintenance_evidence import MaintenanceEvidenceReader
+from core.canonical_ml_reader import CanonicalMLReader
+from core.intervention_preview import (
+    build_intervention_preview_table,
+    build_machine_intervention_preview,
+    candidate_support_label,
+    run_intervention_prediction,
+)
+from core.ml_predictor import MLPredictor
+from core.runtime_capabilities import suppress_write_controls
+from core.runtime_mode import normalize_runtime_mode
+from core.ml_review_queue import (
+    build_blocked_reason_summary,
+    build_inference_coverage_summary,
+    build_model_review_queue,
+    collect_blocked_rows,
+    describe_blocked_reason,
+)
+from core.ml_trainer import get_canonical_retraining_status, run_canonical_retraining
+from core.ui_utils import build_surface_card, render_surface_card, section_shell
 
 
-def render_ml_module():
-    """Main function to render ML module in Streamlit"""
-    
-    # Load centralized CSS styles
-    from core.ui_utils import load_custom_css
-    load_custom_css()
-    
-    st.title("🤖 Machine Learning Module")
-    st.markdown("**Predict efficiency, optimize production, and calculate real ROI**")
-    
-    # Sidebar info
-    with st.sidebar:
-        st.markdown("### 💰 Real Cost Data")
-        st.info("""
-        **Oil Cost**: ¥704/hour  
-        **Machine Cost**: ¥663/hour
-        **Total Cost**: ¥1,367/hour
-        """)
-        
-        st.markdown("### 📊 Data Coverage")
+_RETRAINING_RESULT_KEY = "canonical_ml_retraining_result"
+_RETRAINING_NOTICE_KEY = "canonical_ml_retraining_notice"
+
+
+def render_ml_module(db_path=None, runtime_mode: str = "standard"):
+    """Render the canonical ML page."""
+    try:
         try:
-            conn = sqlite3.connect('manufacturing_data.db')
-            
-            # Get unified view stats - filter for reasonable efficiency values
-            stats = pd.read_sql_query("""
-                SELECT 
-                    COUNT(*) as total_records,
-                    COUNT(DISTINCT machine_id) as machines,
-                    MIN(datetime) as start_date,
-                    MAX(datetime) as end_date,
-                    AVG(CASE 
-                        WHEN kwh_per_unit > 0 AND kwh_per_unit < 100 
-                        THEN kwh_per_unit 
-                        ELSE NULL 
-                    END) as avg_efficiency
-                FROM unified_view
-            """, conn)
-            
-            if len(stats) > 0:
-                st.metric("Total Records", f"{stats.iloc[0]['total_records']:,}")
-                st.metric("Machines", stats.iloc[0]['machines'])
-                
-                # Format efficiency with reasonable precision
-                avg_eff = stats.iloc[0]['avg_efficiency']
-                if avg_eff is not None and not pd.isna(avg_eff):
-                    if avg_eff < 10:
-                        st.metric("Avg Efficiency", f"{avg_eff:.2f} kWh/unit")
-                    else:
-                        st.metric("Avg Efficiency", f"{avg_eff:.1f} kWh/unit")
-                else:
-                    st.metric("Avg Efficiency", "N/A")
-            
-            conn.close()
-        except Exception as e:
-            st.error(f"Database error: {e}")
-    
-    # Single focus on Model Training
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 🎯 Model Training Center")
-    st.markdown("Train and evaluate machine learning models for production efficiency prediction")
-    
-    # Direct rendering without tabs since ML module now focuses only on training
-    render_model_training_tab()
+            from core.ui_utils import load_custom_css
 
+            load_custom_css()
+        except Exception:
+            pass
 
-def render_model_training_tab():
-    """Tab for training ML models - FIXED with persistent results"""
-    
-    st.header("Model Training Dashboard")
-    
-    # Better layout with improved proportions
-    col1, col2 = st.columns([2, 1], gap="large")
-    
-    with col1:
-        st.markdown("### Train Production Efficiency Models")
-        st.info("""
-        Train multiple ML models (Linear Regression, Random Forest, XGBoost) 
-        on your unified data with maintenance context. The best model is 
-        automatically selected based on R² score.
-        """)
-        
-        # Check if model exists
-        model_exists = os.path.exists('models/production_efficiency_model.pkl')
-        
-        if model_exists:
-            st.success("✅ Model already trained and saved")
-            
-            # Try to load and display model info
-            try:
-                conn = sqlite3.connect('manufacturing_data.db')
-                model_info = pd.read_sql_query("""
-                    SELECT * FROM ml_models 
-                    ORDER BY training_date DESC 
-                    LIMIT 1
-                """, conn)
-                conn.close()
-                
-                if len(model_info) > 0:
-                    latest = model_info.iloc[0]
-                    # Create better layout for model info display
-                    st.markdown("#### Current Model Performance")
-                    
-                    # Use a table for better display of model info
-                    model_data = {
-                        'Metric': ['Model Type', 'R² Score', 'MAE', 'RMSE'],
-                        'Value': [
-                            latest['model_type'].replace('_', ' ').title(),
-                            f"{latest['r2_score']:.3f}",
-                            f"{latest['mae']:.4f} kWh/unit" if latest['mae'] < 0.1 else f"{latest['mae']:.3f} kWh/unit",
-                            f"{latest.get('rmse', latest['mae']*1.2):.3f} kWh/unit"
-                        ]
-                    }
-                    
-                    model_df = pd.DataFrame(model_data)
-                    st.dataframe(
-                        model_df,
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Metric": st.column_config.TextColumn(
-                                "Metric",
-                                width="medium"
-                            ),
-                            "Value": st.column_config.TextColumn(
-                                "Value", 
-                                width="large"
-                            )
-                        }
-                    )
-            except:
-                pass
-        
-        # Display stored results if available
-        if 'training_results' in st.session_state:
-            st.markdown("### 📊 Latest Training Results")
-            
-            # Show comparison table with better formatting
-            st.markdown("#### Model Performance Comparison")
-            comparison_df = st.session_state['training_results']['comparison_df'].copy()
-            
-            # Format the dataframe for better display
-            comparison_df['R² Score'] = comparison_df['R² Score'].apply(lambda x: f"{x:.3f}")
-            comparison_df['MAE'] = comparison_df['MAE'].apply(lambda x: f"{x:.3f} kWh/unit")
-            comparison_df['RMSE'] = comparison_df['RMSE'].apply(lambda x: f"{x:.3f} kWh/unit")
-            
-            # Display as HTML table for better control
-            html_table = comparison_df.to_html(index=False, escape=False, classes='comparison-table')
-            
-            # Add custom styling for this specific table
-            st.markdown("""
-                <style>
-                .comparison-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 20px 0;
-                    font-size: 14px;
-                    background: white;
-                    border-radius: 10px;
-                    overflow: hidden;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .comparison-table th {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 12px 15px;
-                    text-align: left;
-                    font-weight: 600;
-                    font-size: 14px;
-                    letter-spacing: 0.5px;
-                }
-                .comparison-table td {
-                    padding: 12px 15px;
-                    border-bottom: 1px solid #f0f0f0;
-                    white-space: nowrap;
-                    font-size: 14px;
-                }
-                .comparison-table tr:last-child td {
-                    border-bottom: none;
-                }
-                .comparison-table tr:hover {
-                    background-color: #f8f9ff;
-                }
-                .comparison-table td:first-child {
-                    font-weight: 600;
-                    color: #333;
-                    min-width: 200px;
-                }
-                .comparison-table tr:has(td:contains("🏆")) {
-                    background-color: #f0fff4;
-                }
-                </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown(html_table, unsafe_allow_html=True)
-            
-            # Show feature importance
-            if 'feature_importance' in st.session_state['training_results']:
-                st.markdown("#### Top 10 Important Features")
-                fig = st.session_state['training_results']['feature_importance']
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # Training button
-        if st.button("🚀 Train New Model", type="primary"):
-            with st.spinner("Training models... This may take a few minutes..."):
-                
-                if not ML_MODULES_AVAILABLE:
-                    # Simulate training for demo
-                    import time
-                    time.sleep(2)
-                    
-                    # Create mock results with full names
-                    comparison_df = pd.DataFrame([
-                        {'Model': 'Linear Regression', 'R² Score': 0.721, 'MAE': 1.234, 'RMSE': 1.567},
-                        {'Model': 'Random Forest', 'R² Score': 0.812, 'MAE': 0.987, 'RMSE': 1.234},
-                        {'Model': '🏆 XGBoost (Best)', 'R² Score': 0.824, 'MAE': 0.876, 'RMSE': 1.123}
-                    ])
-                    
-                    # Create mock feature importance
-                    importance_data = pd.DataFrame({
-                        'Feature': ['hours_since_maintenance', 'team_size', 'hour_of_day', 
-                                   'material_code', 'task_difficulty', 'production_qty',
-                                   'is_weekend', 'maintenance_intensity', 'idle_energy', 'setup_energy'],
-                        'Importance': [17.2, 12.5, 10.8, 9.6, 8.3, 7.2, 6.5, 5.8, 4.3, 3.8]
-                    })
-                    
-                    fig = px.bar(
-                        importance_data,
-                        x='Importance',
-                        y='Feature',
-                        orientation='h',
-                        title='Feature Importance (%)',
-                        color='Importance',
-                        color_continuous_scale='viridis'
-                    )
-                    
-                    # Store results in session state
-                    st.session_state['training_results'] = {
-                        'comparison_df': comparison_df,
-                        'feature_importance': fig,
-                        'timestamp': datetime.now()
-                    }
-                    
-                    st.success("✅ Model training complete! XGBoost selected with R² = 0.824")
-                    st.rerun()
-                    
-                else:
-                    try:
-                        # Real training
-                        trainer, preparer = train_production_model()
-                        
-                        # Get latest training history
-                        latest_results = trainer.training_history[-1]
-                        
-                        # Create comparison dataframe with full names
-                        model_name_map = {
-                            'LINEAR': 'Linear Regression',
-                            'RANDOM_FOREST': 'Random Forest',
-                            'XGBOOST': 'XGBoost',
-                            'LINEAR_REGRESSION': 'Linear Regression',
-                            'RANDOMFOREST': 'Random Forest'
-                        }
-                        
-                        comparison_df = pd.DataFrame([
-                            {
-                                'Model': model_name_map.get(model.upper(), model.replace('_', ' ').title()),
-                                'R² Score': scores['r2_score'],
-                                'MAE': scores['mae'],
-                                'RMSE': scores['rmse']
-                            }
-                            for model, scores in latest_results['models'].items()
-                        ])
-                        
-                        # Highlight best model
-                        best_idx = comparison_df['R² Score'].idxmax()
-                        comparison_df.loc[best_idx, 'Model'] = f"🏆 {comparison_df.loc[best_idx, 'Model']} (Best)"
-                        
-                        # Get feature importance
-                        importance_df = trainer.get_feature_importance_df().head(10)
-                        
-                        fig = px.bar(
-                            importance_df,
-                            x='Importance',
-                            y='Feature',
-                            orientation='h',
-                            title='Feature Importance (%)',
-                            color='Importance',
-                            color_continuous_scale='viridis'
-                        )
-                        
-                        # Store results in session state
-                        st.session_state['training_results'] = {
-                            'comparison_df': comparison_df,
-                            'feature_importance': fig,
-                            'timestamp': datetime.now()
-                        }
-                        
-                        st.success("✅ Model training complete!")
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"Training failed: {str(e)}")
-    
-    with col2:
-        # Training Configuration Section - compact and clean
-        st.markdown("### ⚙️ Training Configuration")
-        
-        # Quick summary box
-        st.info("""
-        **Quick Overview:**
-        • 3 ML models (Linear, RF, XGBoost)
-        • Auto-selection by performance
-        • 5-fold cross-validation
-        • Real-time feature importance
-        """)
-        
-        # Use expander for cleaner interface
-        with st.expander("📋 View Detailed Configuration", expanded=False):
-            # Compact model comparison
-            st.markdown("#### Available Models")
-            
-            models_info = pd.DataFrame({
-                'Model': ['Linear Regression', 'Random Forest', 'XGBoost'],
-                'Training Speed': ['< 1 sec', '~10 sec', '~15 sec'],
-                'Accuracy': ['Good', 'Better', 'Best'],
-                'Complexity': ['Low', 'Medium', 'High']
-            })
-            
-            st.dataframe(
-                models_info,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Model": st.column_config.TextColumn("Model", width="large"),
-                    "Training Speed": st.column_config.TextColumn("Speed", width="small"),
-                    "Accuracy": st.column_config.TextColumn("Accuracy", width="small"),
-                    "Complexity": st.column_config.TextColumn("Complexity", width="small")
-                }
+        reader = CanonicalMLReader(db_path=db_path)
+        maintenance_reader = MaintenanceEvidenceReader(db_path=db_path)
+        predictor = MLPredictor()
+        retraining_status = _get_canonical_retraining_status(db_path=db_path)
+
+        st.title("🤖 Efficiency Prediction & Model Governance")
+        st.markdown(
+            "Canonical month-scoped efficiency review from machine-hour facts only. "
+            "This page shows current-month inference coverage, a model-backed review queue, "
+            "and Scenario Lab evidence from the active saved artifacts. Operational execution "
+            "stays on `🎯 Operational Decision Support`."
+        )
+        st.caption("Canonical Gold source: fact_machine_hour")
+        read_only_runtime = suppress_write_controls(runtime_mode)
+        if read_only_runtime:
+            info_message = (
+                "Demo read-only mode is active. Reviewer-facing inference, review, and Scenario Lab surfaces stay available. "
+                "Retraining controls are hidden."
+                if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+                else "Pilot review mode is active. Reviewer-facing inference, review, and Scenario Lab surfaces stay available. "
+                "Retraining controls are hidden while experimental pilot-review export surfaces remain available on the experimental route."
             )
-            
-            st.markdown("#### Training Parameters")
-            
-            # Parameters in a clean table format
-            params_df = pd.DataFrame({
-                'Parameter': ['Train/Test Split', 'Cross-Validation', 'Feature Selection', 'Auto-Selection'],
-                'Setting': ['80% / 20%', '5-fold stratified', 'Top 20 features', 'By R² score']
-            })
-            
-            st.dataframe(
-                params_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Parameter": st.column_config.TextColumn("Parameter", width="medium"),
-                    "Setting": st.column_config.TextColumn("Setting", width="medium")
-                }
+            st.info(
+                info_message
             )
-            
-            st.info("""
-            💡 **Smart Training**: The system automatically trains all three models 
-            and selects the best performer based on cross-validation R² scores.
-            """)
 
+        available_months = reader.get_available_months()
+        predictor_status = reader.get_predictor_status(predictor)
 
-# REMOVED: render_live_predictions_tab() - moved to shared_ml_components.py
-def _removed_render_live_predictions_tab():
-    """Tab for making real-time predictions - FIXED input display"""
-    
-    st.header("Live Efficiency Predictions")
-    
-    # Check if model exists
-    model_exists = os.path.exists('models/production_efficiency_model.pkl')
-    
-    if not model_exists and not ML_MODULES_AVAILABLE:
-        # Demo mode - allow predictions anyway
-        st.info("📝 Demo Mode: Using simulated predictions")
-    elif not model_exists:
-        st.warning("⚠️ No trained model found. Please train a model first in the Model Training tab.")
-        return
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown("### 📝 Input Parameters")
-        
-        # Try to get data from database, use defaults if fails
-        try:
-            conn = sqlite3.connect('manufacturing_data.db')
-            
-            # Get machines
-            machines_df = pd.read_sql_query(
-                "SELECT DISTINCT machine_id FROM three_way_matches ORDER BY machine_id",
-                conn
-            )
-            machines = machines_df['machine_id'].tolist() if len(machines_df) > 0 else ['024-073', '024-116', '166-002']
-            
-            # Get team leaders
-            leaders_df = pd.read_sql_query(
-                "SELECT DISTINCT team_leader FROM unified_view WHERE team_leader IS NOT NULL LIMIT 20",
-                conn
-            )
-            leaders = leaders_df['team_leader'].tolist() if len(leaders_df) > 0 else ['Leader_Wong', 'Leader_Chen', 'Leader_Liu']
-            
-            # Get materials - FIXED to show ALL materials with search capability
-            materials_df = pd.read_sql_query(
-                """SELECT DISTINCT material_code 
-                   FROM unified_view 
-                   WHERE material_code IS NOT NULL 
-                   ORDER BY material_code""",  # Removed LIMIT to get ALL materials
-                conn
-            )
-            materials = materials_df['material_code'].tolist() if len(materials_df) > 0 else ['MAT_001', 'MAT_002', 'MAT_003']
-            
-            # Show count to user
-            st.info(f"📦 {len(materials)} unique material codes available")
-            
-            conn.close()
-        except:
-            # Use demo data if database fails
-            machines = ['024-073', '024-116', '166-002', '080-015', '125-088']
-            leaders = ['Leader_Wong', 'Leader_Chen', 'Leader_Liu', 'Leader_Zhang', 'Leader_Li']
-            materials = ['MAT_001', 'MAT_002', 'MAT_003', 'MAT_004', 'MAT_005']
-        
-        # Create input widgets
-        machine_id = st.selectbox(
-            "🏭 Machine ID",
-            machines,
-            help="Select the machine for prediction"
-        )
-        
-        team_leader = st.selectbox(
-            "👤 Team Leader",
-            leaders,
-            help="Select the team leader"
-        )
-        
-        material_code = st.selectbox(
-            "📦 Material Code",
-            materials,
-            help="Select the material to be processed"
-        )
-        
-        hours_since_maintenance = st.slider(
-            "🔧 Hours Since Last Maintenance",
-            min_value=0,
-            max_value=2000,
-            value=800,
-            step=50,
-            help="How many hours since the machine was last maintained"
-        )
-        
-        task_difficulty = st.radio(
-            "📊 Task Difficulty",
-            ['易 (Easy)', '中 (Medium)', '難 (Hard)'],
-            index=1,
-            help="Select the complexity of the task"
-        )
-        
-        production_qty = st.number_input(
-            "📦 Planned Output (units)",
-            min_value=100,
-            max_value=20000,
-            value=1200,
-            step=100,
-            help="Enter the batch quantity you plan to produce"
+        latest_canonical_month = available_months[0] if available_months else None
+        _render_predictor_status(
+            retraining_status,
+            predictor_status,
+            latest_canonical_month=latest_canonical_month,
         )
 
-        team_size_value = st.slider(
-            "👥 Team Size",
-            min_value=1,
-            max_value=6,
-            value=3,
-            help="Number of crew members on the machine"
-        )
+        selected_month = None
+        input_df = pd.DataFrame()
+        candidate_df = pd.DataFrame()
+        prediction_df = pd.DataFrame()
+        blocked_prediction_df = pd.DataFrame()
+        metrics = None
 
-        hour_of_day_value = st.slider(
-            "🕑 Hour of Day",
-            min_value=0,
-            max_value=23,
-            value=14,
-            help="Hour when production starts"
-        )
-
-        weekend_shift = st.checkbox("🌙 Weekend Shift", value=False)
-
-        # Extract just the Chinese character for processing
-        task_map = {'易 (Easy)': '易', '中 (Medium)': '中', '難 (Hard)': '難'}
-        task_difficulty_value = task_map[task_difficulty]
-        
-        if st.button("🔮 Predict Efficiency", type="primary", use_container_width=True):
-            with st.spinner("Making prediction..."):
-                
-                if ML_MODULES_AVAILABLE:
-                    try:
-                        predictor = MLPredictor()
-                        prediction = predictor.predict_efficiency(
-                            machine_id=machine_id,
-                            team_leader=team_leader,
-                            material_code=material_code,
-                            hours_since_maintenance=hours_since_maintenance,
-                            task_difficulty=task_difficulty_value,
-                            production_qty=production_qty,
-                            team_size=team_size_value,
-                            hour_of_day=hour_of_day_value,
-                            is_weekend=weekend_shift
-                        )
-                        efficiency = prediction['efficiency']
-                        confidence = prediction['confidence']
-                        
-                        # Check if prediction returned None
-                        if efficiency is None:
-                            # Fallback to simulation if model prediction failed
-                            efficiency = 3.5 + (hours_since_maintenance / 1000) - 0.2
-                            confidence = 0.85
-                            st.warning("Model prediction unavailable, using simulation instead.")
-                    except Exception as e:
-                        # Fallback to simulation with error logging
-                        efficiency = 3.5 + (hours_since_maintenance / 1000) - 0.2
-                        confidence = 0.85
-                        st.warning(f"Prediction error: {str(e)}. Using simulation instead.")
-                else:
-                    # Enhanced simulation with more dynamic response to inputs
-                    base_efficiency = 3.5
-                    
-                    # Machine-specific adjustment
-                    machine_hash = hash(machine_id) % 10
-                    machine_adjustment = (machine_hash - 5) * 0.05  # ±0.25 based on machine
-                    
-                    # Maintenance impact (more granular)
-                    if hours_since_maintenance < 100:
-                        maintenance_impact = -0.3  # Very efficient after maintenance
-                    elif hours_since_maintenance < 500:
-                        maintenance_impact = -0.1
-                    elif hours_since_maintenance < 1000:
-                        maintenance_impact = 0.2
-                    elif hours_since_maintenance < 1500:
-                        maintenance_impact = 0.5
-                    else:
-                        maintenance_impact = 0.8
-                    
-                    # Task difficulty impact
-                    difficulty_impact = {'易': -0.3, '中': 0, '難': 0.4}[task_difficulty_value]
-                    
-                    # Team leader impact
-                    leader_hash = hash(team_leader) % 10
-                    leader_impact = (leader_hash - 5) * 0.03  # ±0.15 based on leader
-                    
-                    # Material impact
-                    material_hash = hash(material_code) % 10
-                    material_impact = (material_hash - 5) * 0.02  # ±0.10 based on material
-                    
-                    # Calculate final efficiency
-                    efficiency = base_efficiency + machine_adjustment + maintenance_impact + difficulty_impact + leader_impact + material_impact
-                    efficiency = max(1.5, min(efficiency, 8.0))  # Keep in reasonable range
-                    
-                    # Dynamic confidence based on inputs
-                    confidence = 0.65
-                    if hours_since_maintenance < 500:
-                        confidence += 0.15
-                    elif hours_since_maintenance > 1500:
-                        confidence -= 0.10
-                    
-                    # Add slight randomness for realism
-                    np.random.seed(int(hours_since_maintenance + hash(machine_id) + hash(team_leader)) % 1000)
-                    efficiency += np.random.normal(0, 0.1)
-                    confidence += np.random.uniform(-0.05, 0.05)
-                    confidence = max(0.5, min(confidence, 0.95))
-                
-                # Store prediction
-                st.session_state['prediction'] = {
-                    'efficiency': efficiency,
-                    'confidence': confidence,
-                    'params': {
-                        'machine_id': machine_id,
-                        'team_leader': team_leader,
-                        'material_code': material_code,
-                        'hours_since_maintenance': hours_since_maintenance,
-                        'task_difficulty': task_difficulty
-                    }
-                }
-                st.rerun()
-    
-    with col2:
-        st.markdown("### 📊 Prediction Results")
-        
-        if 'prediction' in st.session_state:
-            pred = st.session_state['prediction']
-            
-            # Display prediction metrics with null safety
-            col1, col2 = st.columns(2)
-            with col1:
-                # Ensure efficiency is not None before operations
-                efficiency_val = pred.get('efficiency', 3.5)
-                if efficiency_val is None:
-                    efficiency_val = 3.5
-                
-                delta_val = efficiency_val - 3.5
-                delta_color = "normal" if delta_val < 0 else "inverse"
-                st.metric(
-                    "Predicted Efficiency",
-                    f"{efficiency_val:.2f} kWh/unit",
-                    delta=f"{delta_val:+.2f}",
-                    delta_color=delta_color
+        if available_months:
+            selected_month = st.selectbox("Select month", available_months, index=0)
+            input_df = reader.build_month_input_dataframe(selected_month, predictor=predictor)
+            if not input_df.empty:
+                candidate_df = reader.build_prediction_candidates(input_df)
+                prediction_df, blocked_prediction_df = reader.build_prediction_dataframe(
+                    candidate_df,
+                    predictor=predictor,
                 )
-            with col2:
-                # Ensure confidence is not None
-                confidence_val = pred.get('confidence', 0.75)
-                if confidence_val is None:
-                    confidence_val = 0.75
-                
-                confidence_pct = confidence_val * 100
-                st.metric("Confidence", f"{confidence_pct:.0f}%")
-            
-            impacts = pred.get('feature_impacts', {})
-            if impacts:
-                st.markdown("#### 🔍 Key Drivers")
-                friendly_names = {
-                    'production_qty': 'Production Load',
-                    'hours_since_last_maintenance': 'Maintenance Gap',
-                    'team_size': 'Team Size',
-                    'task_complexity': 'Task Complexity',
-                    'hour_of_day': 'Shift Timing'
-                }
-                for label, description in impacts.items():
-                    display_label = friendly_names.get(label, label.replace('_', ' ').title())
-                    st.write(f"- **{display_label}**: {description}")
+                metrics = reader.build_month_readiness_metrics(
+                    input_df,
+                    candidate_df,
+                    blocked_prediction_df=blocked_prediction_df,
+                )
+                _render_readiness_metrics(
+                    selected_month,
+                    metrics,
+                    input_df,
+                    blocked_prediction_df,
+                )
 
-            # Calculate savings with null safety
-            current_baseline = 4.5
-            efficiency_val = pred.get('efficiency', 3.5)
-            if efficiency_val is None:
-                efficiency_val = 3.5
-            
-            improvement = current_baseline - efficiency_val
-            monthly_hours = 720  # 30 days × 24 hours
-            
-            # Real costs
-            oil_cost = 704
-            machine_cost = 663
-            total_cost = 1367
-            
-            monthly_savings = improvement * monthly_hours * total_cost * 0.1  # 10% of improvement
-            
-            st.markdown("### 💰 Potential Savings")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Monthly Savings", f"¥{monthly_savings:,.0f}")
-                st.metric("Machine Cost Savings", f"¥{monthly_savings * 0.48:,.0f}")
-            
-            with col2:
-                st.metric("Annual Savings", f"¥{monthly_savings * 12:,.0f}")
-                st.metric("Oil Cost Savings", f"¥{monthly_savings * 0.52:,.0f}")
-            
-            # Show input parameters
-            with st.expander("📋 Input Parameters Used"):
-                for key, value in pred['params'].items():
-                    st.write(f"**{key.replace('_', ' ').title()}**: {value}")
-        else:
-            st.info("👈 Enter parameters and click 'Predict Efficiency' to see results")
+        tab_predictions, tab_training, tab_reference = st.tabs(
+            ["🔮 Prediction Workflow", "🧪 Model Governance", "📘 Reference & Audit"]
+        )
 
-
-def render_feature_insights_tab():
-    """Tab for understanding model features"""
-    
-    st.header("Feature Analysis & Insights")
-    
-    # Try to load real data, use simulation if fails
-    try:
-        conn = sqlite3.connect('manufacturing_data.db')
-        
-        # Get unified view data for analysis
-        data = pd.read_sql_query("""
-            SELECT 
-                hours_since_last_maintenance,
-                kwh_per_unit,
-                team_size,
-                maintenance_intensity_30d,
-                task_type,
-                CAST(strftime('%H', datetime) as INTEGER) as hour_of_day
-            FROM unified_view
-            WHERE kwh_per_unit > 0 AND kwh_per_unit < 100
-            LIMIT 10000
-        """, conn)
-        
-        conn.close()
-        
-        if len(data) == 0:
-            raise ValueError("No data")
-            
-    except:
-        # Create simulated data for demo
-        np.random.seed(42)
-        n_samples = 5000
-        
-        data = pd.DataFrame({
-            'hours_since_last_maintenance': np.random.exponential(500, n_samples),
-            'team_size': np.random.choice([1, 2, 3, 4, 5], n_samples, p=[0.1, 0.25, 0.35, 0.2, 0.1]),
-            'hour_of_day': np.random.randint(0, 24, n_samples),
-            'task_type': np.random.choice(['印色', '印色+光油', '光油'], n_samples, p=[0.5, 0.3, 0.2]),
-            'maintenance_intensity_30d': np.random.poisson(2, n_samples)
-        })
-        
-        # Create realistic efficiency based on features
-        data['kwh_per_unit'] = (
-            3.0 + 
-            data['hours_since_last_maintenance'] / 1000 +
-            (4 - data['team_size']) * 0.2 +
-            np.random.normal(0, 0.5, n_samples)
-        )
-        data['kwh_per_unit'] = data['kwh_per_unit'].clip(1, 10)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 🔧 Maintenance Impact on Efficiency")
-        
-        # Create bins for maintenance hours
-        data['maintenance_category'] = pd.cut(
-            data['hours_since_last_maintenance'].fillna(500),
-            bins=[0, 200, 500, 800, 1200, 2000],
-            labels=['0-200h', '200-500h', '500-800h', '800-1200h', '1200h+']
-        )
-        
-        avg_efficiency = data.groupby('maintenance_category')['kwh_per_unit'].mean().reset_index()
-        
-        fig = px.bar(
-            avg_efficiency,
-            x='maintenance_category',
-            y='kwh_per_unit',
-            title='Efficiency vs Maintenance Age',
-            labels={'kwh_per_unit': 'Avg kWh/unit', 'maintenance_category': 'Hours Since Maintenance'},
-            color='kwh_per_unit',
-            color_continuous_scale='RdYlGn_r'
-        )
-        fig.add_hline(y=3.5, line_dash="dash", line_color="gray", 
-                     annotation_text="Target: 3.5 kWh/unit")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.info("💡 **Key Insight**: Efficiency degrades significantly after 800 hours. Schedule maintenance between 600-800 hours for optimal performance.")
-    
-    with col2:
-        st.markdown("### 👥 Team Size Effect")
-        
-        team_efficiency = data.groupby('team_size')['kwh_per_unit'].agg(['mean', 'count']).reset_index()
-        team_efficiency = team_efficiency[team_efficiency['count'] > 10]
-        
-        fig = px.line(
-            team_efficiency,
-            x='team_size',
-            y='mean',
-            title='Team Size vs Efficiency',
-            labels={'mean': 'Avg kWh/unit', 'team_size': 'Team Size'},
-            markers=True
-        )
-        fig.add_hline(y=3.5, line_dash="dash", line_color="gray",
-                     annotation_text="Target")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.info("💡 **Key Insight**: 3-person teams are 15% more efficient than other team sizes. Consider standardizing team size to 3.")
-    
-    # Hour of day pattern
-    st.markdown("### ⏰ Hourly Production Patterns")
-    
-    hourly_data = data.groupby('hour_of_day')['kwh_per_unit'].agg(['mean', 'std', 'count']).reset_index()
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=hourly_data['hour_of_day'],
-        y=hourly_data['mean'],
-        mode='lines+markers',
-        name='Average Efficiency',
-        line=dict(color='blue', width=2),
-        error_y=dict(
-            type='data',
-            array=hourly_data['std'],
-            visible=True
-        )
-    ))
-    
-    # Add shift backgrounds
-    fig.add_vrect(x0=0, x1=7, fillcolor="blue", opacity=0.1, annotation_text="Night Shift")
-    fig.add_vrect(x0=7, x1=15, fillcolor="yellow", opacity=0.1, annotation_text="Day Shift")
-    fig.add_vrect(x0=15, x1=23, fillcolor="orange", opacity=0.1, annotation_text="Evening Shift")
-    
-    # Highlight hour 16
-    fig.add_vline(x=16, line_dash="dash", line_color="green",
-                 annotation_text="Peak Performance: 4 PM")
-    
-    fig.update_layout(
-        title='24-Hour Efficiency Pattern',
-        xaxis_title='Hour of Day',
-        yaxis_title='Avg kWh/unit',
-        hovermode='x unified'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Key Insights Summary - moved to full width for better display
-    st.markdown("### 🎯 Key Insights Summary")
-    
-    st.success("""
-    **📊 AI-Discovered Patterns:**
-    
-    1. **Maintenance Sweet Spot**: 600-800 hours maximizes efficiency vs cost
-    
-    2. **Optimal Team Size**: 3-person teams outperform by 15%
-    
-    3. **Hour 16:00 Peak**: Pre-shift-change focus boost
-    
-    4. **Night Shift Trade-off**: +20% quantity but -15% efficiency
-    
-    5. **Simple Task Problem**: Coating-only tasks need attention
-    
-    6. **Idle Time Opportunity**: Current 45% → Target 35% = ¥1M/month
-    """)
-
-
-def render_recommendations_tab():
-    """Tab for machine-specific recommendations"""
-    
-    st.header("Optimization Recommendations")
-    
-    # Get list of machines (demo data if database fails)
-    try:
-        conn = sqlite3.connect('manufacturing_data.db')
-        machines_df = pd.read_sql_query(
-            "SELECT DISTINCT machine_id FROM three_way_matches ORDER BY machine_id",
-            conn
-        )
-        machines = machines_df['machine_id'].tolist()
-        
-        # Get poor performers
-        poor_performers = pd.read_sql_query("""
-            SELECT 
-                machine_id,
-                AVG(kwh_per_unit) as avg_efficiency,
-                AVG(hours_since_last_maintenance) as avg_maintenance_hours,
-                COUNT(*) as data_points
-            FROM unified_view
-            WHERE kwh_per_unit > 0 AND kwh_per_unit < 100
-            GROUP BY machine_id
-            HAVING avg_efficiency > 4
-            ORDER BY avg_efficiency DESC
-            LIMIT 10
-        """, conn)
-        
-        conn.close()
-    except:
-        # Demo data
-        machines = ['024-073', '024-116', '166-002', '080-015', '125-088']
-        poor_performers = pd.DataFrame({
-            'machine_id': ['166-002', '080-015', '024-116'],
-            'avg_efficiency': [5.2, 4.8, 4.5],
-            'avg_maintenance_hours': [1200, 950, 800],
-            'data_points': [500, 450, 600]
-        })
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.markdown("### 🏭 Select Machine")
-        
-        selected_machine = st.selectbox(
-            "Machine ID",
-            machines,
-            help="Select a machine to get specific recommendations"
-        )
-        
-        if st.button("🔍 Analyze Machine", type="primary", use_container_width=True):
-            st.session_state['analyzed_machine'] = selected_machine
-        
-        st.markdown("### 🚨 Machines Needing Attention")
-        
-        if len(poor_performers) > 0:
-            for _, machine in poor_performers.head(5).iterrows():
-                efficiency_delta = machine['avg_efficiency'] - 3.5
-                with st.expander(f"⚠️ {machine['machine_id']} - {machine['avg_efficiency']:.1f} kWh/unit"):
-                    st.metric("Above Target", f"+{efficiency_delta:.1f} kWh/unit", delta_color="inverse")
-                    st.write(f"**Avg Maintenance**: {machine['avg_maintenance_hours']:.0f} hours")
-                    st.write(f"**Data Points**: {machine['data_points']}")
-                    st.write(f"**Monthly Loss**: ¥{efficiency_delta * 720 * 1367 * 0.1:,.0f}")
-    
-    with col2:
-        st.markdown("### 📋 Recommendations")
-        
-        if 'analyzed_machine' in st.session_state:
-            machine_id = st.session_state['analyzed_machine']
-            
-            # Generate recommendations based on machine
-            if machine_id == '166-002':
-                recommendations = [
-                    {
-                        'type': 'Maintenance',
-                        'priority': 'High',
-                        'action': 'Schedule immediate maintenance - 1,200 hours overdue!',
-                        'expected_savings': 120000,
-                        'confidence': 0.92
-                    },
-                    {
-                        'type': 'Team Assignment',
-                        'priority': 'Medium',
-                        'action': 'Reassign to 3-person team (currently using 2)',
-                        'expected_savings': 45000,
-                        'confidence': 0.78
-                    },
-                    {
-                        'type': 'Schedule',
-                        'priority': 'Low',
-                        'action': 'Move critical production to Hour 16:00',
-                        'expected_savings': 15000,
-                        'confidence': 0.65
-                    }
-                ]
+        with tab_predictions:
+            if not available_months:
+                st.warning(
+                    "Canonical Gold is not available yet for the ML page. "
+                    "Run ETL for a month that materializes `fact_machine_hour`, then reload this page."
+                )
+            elif input_df.empty:
+                st.warning(
+                    f"No canonical ML input rows are available for {selected_month}. "
+                    "This page does not fall back to legacy or synthetic data."
+                )
             else:
-                # Generic recommendations
-                recommendations = [
+                _render_prediction_results(
+                    prediction_df,
+                    candidate_df,
+                    input_df,
+                    blocked_prediction_df,
+                    predictor,
+                    maintenance_reader,
+                )
+
+        with tab_training:
+            _render_training_controls(db_path=db_path, runtime_mode=runtime_mode)
+
+        with tab_reference:
+            _render_reference_and_audit(
+                prediction_df,
+                candidate_df,
+                input_df,
+                blocked_prediction_df,
+            )
+    except Exception as exc:
+        st.error(f"ML page failed: {exc}")
+        st.info("The canonical ML route did not fall back to legacy or synthetic data.")
+
+
+def _render_readiness_metrics(
+    selected_month: str,
+    metrics: dict[str, int],
+    input_df: pd.DataFrame,
+    blocked_prediction_df: pd.DataFrame,
+) -> None:
+    coverage_ratio = (
+        metrics["rows_eligible_for_inference"] / metrics["canonical_rows_loaded_for_ml"]
+        if metrics["canonical_rows_loaded_for_ml"] > 0
+        else 0.0
+    )
+    coverage_df = build_inference_coverage_summary(input_df)
+    blocked_df = collect_blocked_rows(input_df, blocked_prediction_df)
+    blocked_summary_df = build_blocked_reason_summary(blocked_df)
+
+    with section_shell(
+        "Selected-Month Inference Readiness",
+        (
+            f"This section shows how much of {selected_month} can be scored now by the active saved model. "
+            "It is about current-month inference eligibility and support coverage, not retraining status."
+        ),
+        eyebrow="Current-Month Scope",
+    ):
+        summary_cards = [
+            build_surface_card(
+                "Canonical Rows",
+                f"{metrics['canonical_rows_loaded_for_ml']:,}",
+                "All canonical machine-hour rows loaded for the selected month.",
+            ),
+            build_surface_card(
+                "Distinct Machines",
+                f"{metrics['distinct_machines']:,}",
+                "Machines represented in the selected-month canonical ML slice.",
+            ),
+            build_surface_card(
+                "Inferable Rows",
+                f"{metrics['rows_eligible_for_inference']:,}",
+                f"{_format_ratio(coverage_ratio)} of selected-month rows are currently inferable.",
+                accent="#0f766e",
+            ),
+            build_surface_card(
+                "Blocked Rows",
+                f"{metrics['rows_blocked_for_missing_features']:,}",
+                f"{_format_ratio(1.0 - coverage_ratio if metrics['canonical_rows_loaded_for_ml'] else 0.0)} still remain outside the supported inference contract.",
+                accent="#b45309",
+            ),
+        ]
+        _render_card_grid(summary_cards, columns=4)
+
+        st.markdown("#### Current-Month Inference Coverage")
+        st.caption(
+            "Support-path composition is shown as coverage only. These counts and shares are not trend or improvement indicators."
+        )
+        if not coverage_df.empty:
+            _render_inference_coverage_bar(coverage_df)
+            coverage_cards = [
+                build_surface_card(
+                    row["coverage_bucket"],
+                    f"{int(row['rows']):,}",
+                    f"{_format_ratio(row['share'])} of canonical rows",
+                    accent=_coverage_accent(str(row["support_path"])),
+                )
+                for _, row in coverage_df.iterrows()
+            ]
+            _render_card_grid(coverage_cards, columns=4)
+
+        if not blocked_summary_df.empty and blocked_summary_df[
+            "blocked_reason_family"
+        ].eq("Missing / non-positive good_qty").any():
+            st.caption(
+                "The former single `missing_positive_good_qty` bucket is now split narrowly into "
+                "nonproductive-state rows, a production-state zero-good-qty subtaxonomy, and insufficient-context rows. "
+                "This improves readiness explanation only; inference eligibility is unchanged."
+            )
+        st.info(_blocked_reason_snapshot_text(blocked_summary_df))
+
+
+def _render_predictor_status(
+    retraining_status: dict[str, object],
+    predictor_status: dict[str, object],
+    *,
+    latest_canonical_month: str | None,
+) -> None:
+    with section_shell(
+        "Active Model Summary",
+        (
+            "Active saved-artifact provenance for the routed ML page. "
+            "The selected-month readiness below measures current inference coverage only."
+        ),
+        eyebrow="Active Artifact",
+    ):
+        model_summary = _build_active_model_summary(retraining_status)
+        summary_cards = [
+            build_surface_card("Model Version", model_summary["model_version"], "Current active artifact version."),
+            build_surface_card("Trained At", model_summary["trained_at"], "Last recorded training timestamp."),
+            build_surface_card("R²", model_summary["r2_score"], "Holdout quality from the active saved model."),
+            build_surface_card("MAE", model_summary["mae"], "Holdout error from the active saved model."),
+        ]
+        _render_card_grid(summary_cards, columns=4)
+
+        chip_rows = [
+            ("Latest canonical month", latest_canonical_month or "n/a"),
+            ("Model loadable", "Yes" if predictor_status["model_artifact_present"] else "No"),
+            ("Preprocessor loadable", "Yes" if predictor_status["predictor_bundle_present"] else "No"),
+            (
+                "Canonical inference",
+                "Enabled" if predictor_status["canonical_inference_enabled"] else "Blocked",
+            ),
+            (
+                "Training month footprint",
+                ", ".join(retraining_status.get("month_coverage") or []) or "n/a",
+            ),
+        ]
+        chip_html = "".join(
+            [
+                (
+                    "<span style='display:inline-block;padding:0.25rem 0.65rem;margin:0 0.5rem 0.5rem 0;"
+                    "border-radius:999px;background:#eef2ff;color:#1f2937;font-size:0.85rem;'>"
+                    f"<strong>{label}:</strong> {value}</span>"
+                )
+                for label, value in chip_rows
+            ]
+        )
+        st.markdown(chip_html, unsafe_allow_html=True)
+        st.caption(
+            "Active artifacts remain the accepted Task 14F bundle. Canonical month extension changes source coverage only; it does not retrain or refresh the live predictor bundle."
+        )
+        st.caption(
+            "The active model can be trained on a broader canonical month footprint while the readiness view below "
+            "still answers a different question: how much of the currently selected month is inferable now."
+        )
+
+
+def _render_prediction_results(
+    prediction_df: pd.DataFrame,
+    candidate_df: pd.DataFrame,
+    input_df: pd.DataFrame,
+    blocked_prediction_df: pd.DataFrame,
+    predictor: MLPredictor,
+    maintenance_reader: MaintenanceEvidenceReader,
+) -> None:
+    if prediction_df.empty:
+        st.warning(
+            "No canonical predictions were produced for the selected month. "
+            "Rows are blocked instead of using fallback simulation."
+        )
+        return
+
+    review_queue_df = build_model_review_queue(
+        candidate_df,
+        prediction_df,
+        predictor=predictor,
+    )
+
+    with section_shell(
+        "Model Review Queue",
+        (
+            "Primary review surface for the current month. Candidates are ranked by predicted excess kWh "
+            "at the current seed volume, confidence, and support-path weight. This is a review queue, not an intervention engine."
+        ),
+        eyebrow="Decision-Oriented Output",
+    ):
+        if review_queue_df.empty:
+            st.info("No model-backed review candidates are available for the selected month.")
+        else:
+            priority_candidates = int((review_queue_df["review_priority_score"] > 0).sum())
+            preview_ready = int(review_queue_df["preview_available"].sum())
+            top_row = review_queue_df.iloc[0]
+            queue_cards = [
+                build_surface_card(
+                    "Top Review Candidate",
+                    str(top_row["machine_id"]),
+                    f"Priority score {float(top_row['review_priority_score']):,.2f} on the current selected-month evidence.",
+                ),
+                build_surface_card(
+                    "Candidates Above Baseline",
+                    f"{priority_candidates:,}",
+                    "Machines whose predicted kWh / unit sits above the comparable peer baseline.",
+                ),
+                build_surface_card(
+                    "Scenario Lab Ready",
+                    f"{preview_ready:,}",
+                    "Machines with at least one supported Scenario Lab template on the current seed row.",
+                ),
+                build_surface_card(
+                    "Baseline Contract",
+                    "Peer median",
+                    "Preferred order: family + task difficulty, then task difficulty, then selected-month median fallback.",
+                ),
+            ]
+            _render_card_grid(queue_cards, columns=4)
+
+            _render_review_priority_chart(review_queue_df)
+            st.dataframe(
+                _build_review_queue_display(review_queue_df),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+    _render_scenario_lab(
+        candidate_df,
+        prediction_df,
+        predictor,
+        review_queue_df,
+        maintenance_reader,
+    )
+
+
+def _render_reference_and_audit(
+    prediction_df: pd.DataFrame,
+    candidate_df: pd.DataFrame,
+    input_df: pd.DataFrame,
+    blocked_prediction_df: pd.DataFrame,
+) -> None:
+    blocked_df = collect_blocked_rows(input_df, blocked_prediction_df)
+    blocked_summary_df = build_blocked_reason_summary(blocked_df)
+
+    with section_shell(
+        "Blocked And Unsupported Evidence",
+        "Blocked rows stay visible for honesty, but the raw detail is kept here as supporting evidence rather than the main review story.",
+        eyebrow="Reference & Audit",
+    ):
+        if blocked_summary_df.empty:
+            st.caption("No blocked rows for the selected month.")
+        else:
+            fig = px.bar(
+                blocked_summary_df,
+                x="row_count",
+                y="blocked_reason_label",
+                orientation="h",
+                title="Blocked Reason Summary",
+                labels={"row_count": "Rows", "blocked_reason_label": "Blocked Reason"},
+                hover_data={
+                    "blocked_reason": True,
+                    "blocked_reason_family": True,
+                    "blocked_reason_description": True,
+                    "row_count": False,
+                    "blocked_reason_label": False,
+                },
+                color_discrete_sequence=["#94a3b8"],
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("Blocked row detail", expanded=False):
+                st.dataframe(
+                    _build_blocked_detail_display(blocked_df),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+    with section_shell(
+        "Machine-Level Prediction Evidence",
+        "Full machine-level prediction evidence is retained here for audit review after the primary review queue.",
+        eyebrow="Reference & Audit",
+    ):
+        if prediction_df.empty:
+            st.caption("No machine-level predictions are available for the selected month.")
+        else:
+            st.dataframe(
+                _build_prediction_audit_display(candidate_df, prediction_df),
+                hide_index=True,
+                use_container_width=True,
+            )
+        if not candidate_df.empty:
+            st.caption(
+                f"Latest machine-level candidates considered for inference: {candidate_df['machine_id'].nunique():,}"
+            )
+
+    _render_contract_notes()
+
+
+def _render_contract_notes() -> None:
+    with st.expander("Reference & Audit: Canonical ML Input Contract", expanded=False):
+        st.markdown(
+            """
+            - Canonical inputs are loaded from `fact_machine_hour` only.
+            - Direct canonical fields:
+              `canonical_machine_id`, `hour_ts`, `material_code`, `task_name`, `good_qty`, `team_leader`, `team_size`, `manpower`, `hours_since_last_maintenance`, `last_maintenance_work_order_type`, `maintenance_distinct_work_order_count_30d`, `cumulative_maintenance_count`.
+            - Derived fields:
+              `machine_id`, `hour_of_day`, `day_of_week`, `month`, `is_weekend`, `production_qty = good_qty`.
+            - Safe adapter rules:
+              `task_difficulty` is derived from canonical printing vs finishing task families, including the Jan-Jun `UV` / `水油` / `啞油` variants; rows with still-unmapped task labels are blocked instead of defaulted.
+              canonical Gold now prefers exact same-machine MES `manpower` and otherwise stores CSI roster-derived `team_size` when the overlapping CSI event still carries a leader/member list.
+              the ML reader uses canonical `team_size` first, then rounded `manpower`, then the preprocessor median only for the remaining exceptional rows with no honest crew signal.
+              canonical retraining status below exposes the current residual dependence on that last-resort preprocessor-default path.
+              `maintenance_intensity_30d` comes from canonical `maintenance_distinct_work_order_count_30d`.
+              `cumulative_maintenance_count` comes from canonical Gold directly and falls back to `0` only when the row is still missing the explicit value.
+              `last_maintenance_type` uses canonical `last_maintenance_work_order_type`, then `unknown`.
+            - Hard block rules:
+              rows are blocked when machine ID is missing, timestamp is missing, `hours_since_last_maintenance` is missing, or `task_name` cannot be mapped into the supported task-difficulty families.
+              rows with missing / non-positive `good_qty` still remain blocked, but are now reported more honestly as nonproductive-state rows, production-state zero-good-qty rows, or insufficient-context rows.
+              within the production-state bucket, the routed ML path now distinguishes likely state-label contradictions, likely quantity-overlay gaps, likely order/material context conflicts, and likely source-quality/anomaly cases when the existing row fields support that split cleanly.
+            - Prediction safety rule:
+              if the saved predictor returns a non-`model` source, the page blocks that row instead of showing fallback simulation output.
+            """
+        )
+
+
+def _render_training_pending() -> None:
+    st.info("Canonical retraining status is shown below.")
+
+
+def _get_canonical_retraining_status(db_path=None, model_path=None, preprocessor_path=None):
+    return get_canonical_retraining_status(
+        db_path=db_path,
+        model_path=model_path,
+        preprocessor_path=preprocessor_path,
+    )
+
+
+def _trigger_canonical_retraining(db_path=None, model_path=None, preprocessor_path=None):
+    return run_canonical_retraining(
+        db_path=db_path,
+        model_path=model_path,
+        preprocessor_path=preprocessor_path,
+    )
+
+
+def _render_training_controls(db_path=None, runtime_mode: str = "standard") -> None:
+    _render_training_pending()
+
+    status = _get_canonical_retraining_status(db_path=db_path)
+    _render_retraining_status(status)
+
+    notice = st.session_state.pop(_RETRAINING_NOTICE_KEY, None)
+    if notice:
+        st.success(notice)
+
+    latest_result = st.session_state.get(_RETRAINING_RESULT_KEY)
+    if latest_result:
+        _render_retraining_result(latest_result)
+
+    if suppress_write_controls(runtime_mode):
+        warning_message = (
+            "Demo read-only mode hides the retraining action because it can refresh candidate/active artifact state. "
+            "Artifact status and provenance remain visible above."
+            if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+            else "Pilot review mode hides the retraining action because defended-core artifact state must remain fixed during pilot evaluation. "
+            "Artifact status and provenance remain visible above."
+        )
+        st.warning(
+            warning_message
+        )
+        return
+
+    retrain_disabled = not status["trainer_prerequisites_met"]
+    if st.button(
+        "Retrain from canonical Gold",
+        disabled=retrain_disabled,
+        use_container_width=True,
+    ):
+        try:
+            result = _trigger_canonical_retraining(db_path=db_path)
+        except Exception as exc:
+            st.error(f"Canonical retraining failed: {exc}")
+            st.info("No mock or fallback training results were shown.")
+            return
+
+        st.session_state[_RETRAINING_RESULT_KEY] = result
+        if result.get("promotion_success"):
+            st.session_state[_RETRAINING_NOTICE_KEY] = (
+                "Canonical reevaluation completed and the active artifacts were refreshed."
+            )
+        else:
+            st.session_state[_RETRAINING_NOTICE_KEY] = (
+                "Canonical reevaluation completed and the prior active artifacts were retained."
+            )
+        st.rerun()
+
+
+def _render_retraining_status(status: dict[str, object]) -> None:
+    with section_shell(
+        "Canonical Retraining Status",
+        "Governance view for the active canonical training path. Detailed training-footprint evidence is available below on demand.",
+        eyebrow="Model Governance",
+    ):
+        status_cards = [
+            build_surface_card(
+                "fact_machine_hour Reachable",
+                "Yes" if status["fact_machine_hour_reachable"] else "No",
+                "Whether the canonical training source is reachable from the active runtime.",
+            ),
+            build_surface_card(
+                "Trainer Prerequisites",
+                "Ready" if status["trainer_prerequisites_met"] else "Blocked",
+                "Retraining remains a manual action and is blocked honestly when prerequisites fail.",
+            ),
+            build_surface_card(
+                "Model Artifact",
+                "Loadable" if status["artifact_status"]["model_loadable"] else "Missing / Broken",
+                "Current saved model artifact state.",
+            ),
+            build_surface_card(
+                "Preprocessor Artifact",
+                "Loadable" if status["artifact_status"]["preprocessor_loadable"] else "Missing / Broken",
+                "Current saved preprocessor state.",
+            ),
+        ]
+        _render_card_grid(status_cards, columns=4)
+
+        if status["missing_columns"]:
+            st.warning(
+                "Missing required canonical training columns: "
+                + ", ".join(status["missing_columns"])
+            )
+
+        if status["blocker_reason"]:
+            st.warning(f"Retraining blocker: {status['blocker_reason']}")
+        else:
+            st.caption("No current blocker was detected for canonical retraining.")
+
+        with st.expander("Reference & Audit: Training footprint and provenance", expanded=False):
+            if status["load_summary"]:
+                summary = status["load_summary"]
+                st.caption(
+                    "Canonical training footprint: "
+                    f"rows read {summary.get('fact_rows_read', 0):,}, "
+                    f"rows after filtering {summary.get('rows_after_filtering', 0):,}, "
+                    f"distinct machines {summary.get('distinct_machines_after_filtering', 0):,}, "
+                    f"month coverage {', '.join(status.get('month_coverage') or []) or 'n/a'}"
+                )
+
+            fallback_summary = status.get("team_size_fallback_summary") or {}
+            if fallback_summary:
+                default_months = fallback_summary.get(
+                    "monthly_rows_using_team_size_from_preprocessor_default",
+                    {},
+                )
+                default_month_text = (
+                    ", ".join(f"{month}={count}" for month, count in default_months.items())
+                    if default_months
+                    else "none"
+                )
+                st.caption(
+                    "Residual crew fallback on the real canonical trainer path: "
+                    f"default-team rows {fallback_summary.get('rows_using_team_size_from_preprocessor_default', 0):,} "
+                    f"across {fallback_summary.get('distinct_machines_using_team_size_from_preprocessor_default', 0):,} machines; "
+                    f"manpower-derived rows {fallback_summary.get('rows_using_team_size_from_manpower', 0):,}; "
+                    f"monthly default breakdown {default_month_text}"
+                )
+
+            if status.get("evaluation_strategy"):
+                st.caption(
+                    "Current reevaluation split: "
+                    f"train months {', '.join(status.get('train_months') or []) or 'n/a'} | "
+                    f"eval months {', '.join(status.get('eval_months') or []) or 'n/a'} | "
+                    f"train rows {status.get('train_rows', 0):,} | "
+                    f"eval rows {status.get('eval_rows', 0):,}"
+                )
+
+            st.caption(
+                "ML metadata table present: "
+                + ("Yes" if status.get("ml_models_table_exists") else "No")
+            )
+
+            metadata = status.get("last_training_metadata")
+            if metadata:
+                st.caption("Last known training metadata")
+                st.dataframe(
+                    pd.DataFrame([metadata]).rename(
+                        columns={
+                            "model_name": "Model Name",
+                            "model_type": "Model Type",
+                            "training_date": "Training Date",
+                            "r2_score": "R² Score",
+                            "mae": "MAE",
+                            "feature_count": "Feature Count",
+                        }
+                    ),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+            artifact_df = pd.DataFrame(
+                [
                     {
-                        'type': 'Process Optimization',
-                        'priority': 'Medium',
-                        'action': 'Review and optimize material transition sequence',
-                        'expected_savings': 35000,
-                        'confidence': 0.75
+                        "Artifact": "Model",
+                        "Active File": _short_file_label(status["model_path"]),
+                        "Exists": status["artifact_status"]["model_exists"],
+                        "Loadable": status["artifact_status"]["model_loadable"],
+                        "Provenance": status["artifact_status"]["model_provenance_state"],
+                        "Modified At": status["artifact_status"]["model_modified_at"],
                     },
                     {
-                        'type': 'Training',
-                        'priority': 'Low',
-                        'action': 'Retrain operators on coating-only (光油) procedures',
-                        'expected_savings': 20000,
-                        'confidence': 0.60
-                    }
+                        "Artifact": "Preprocessor",
+                        "Active File": _short_file_label(status["preprocessor_path"]),
+                        "Exists": status["artifact_status"]["preprocessor_exists"],
+                        "Loadable": status["artifact_status"]["preprocessor_loadable"],
+                        "Provenance": status["artifact_status"]["preprocessor_provenance_state"],
+                        "Modified At": status["artifact_status"]["preprocessor_modified_at"],
+                    },
                 ]
-            
-            # Display recommendations
-            for rec in recommendations:
-                # Color coding by priority
-                if rec['priority'] == 'High':
-                    alert = st.error
-                    icon = "🔴"
-                elif rec['priority'] == 'Medium':
-                    alert = st.warning
-                    icon = "🟡"
-                else:
-                    alert = st.info
-                    icon = "🟢"
-                
-                with alert(f"{icon} {rec['type']} - Priority: {rec['priority']}"):
-                    st.write(rec['action'])
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Expected Savings", f"¥{rec['expected_savings']:,.0f}/month")
-                    with col2:
-                        st.metric("Confidence", f"{rec['confidence']:.0%}")
-            
-            # Show performance trend
-            st.markdown("### 📈 30-Day Performance Trend")
-            
-            # Generate sample trend data
-            dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
-            efficiency_trend = 4.5 + np.random.normal(0, 0.3, 30)
-            if machine_id == '166-002':
-                # Show degrading trend for problem machine
-                efficiency_trend = efficiency_trend + np.linspace(0, 0.8, 30)
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=dates,
-                y=efficiency_trend,
-                mode='lines+markers',
-                name='Efficiency (kWh/unit)',
-                line=dict(color='blue', width=2)
-            ))
-            
-            # Add target line
-            fig.add_hline(y=3.5, line_dash="dash", line_color="green",
-                         annotation_text="Target: 3.5")
-            
-            fig.update_layout(
-                title=f'Machine {machine_id} - Last 30 Days',
-                xaxis_title='Date',
-                yaxis_title='kWh/unit',
-                hovermode='x unified'
             )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Stop rate explanation
-            if machine_id in ['166-002', '080-015']:
-                st.markdown("### ⚠️ High Stop Rate Detected")
-                st.info("""
-                **What is Stop Rate?**
-                - Number of production interruptions per hour
-                - Normal: 2-3 stops/hour
-                - This machine: 5.6 stops/hour
-                
-                **Impact:**
-                - 30% more energy for restarts
-                - 20% production loss
-                - Quality inconsistency
-                
-                **Root Causes:**
-                - Material feed issues
-                - Operator attention lapses
-                - Maintenance degradation
-                """)
-        else:
-            st.info("👈 Select a machine and click 'Analyze' to see personalized recommendations")
-        
-        # General recommendations
-        st.markdown("### 💡 Universal Best Practices")
-        
-        st.success("""
-        **Based on 158,791 Hours of Data Analysis:**
-        
-        1. **🔧 Maintain at 600-800 hours** 
-           - Current avg: 1,158 hours (too late!)
-           - Savings: ¥80,000/machine/month
-        
-        2. **👥 Use 3-person teams**
-           - 15% better than 2 or 4 person teams
-           - Savings: ¥45,000/team/month
-        
-        3. **⏰ Schedule critical work at Hour 16:00**
-           - Lowest failure rate (9.9 min stops vs 15 min avg)
-           - Savings: ¥30,000/month
-        
-        4. **📋 Investigate coating-only (光油) procedures**
-           - 2x higher stop rate than complex tasks
-           - Potential: ¥60,000/month
-        
-        5. **⚡ Reduce idle from 45% → 35%**
-           - Biggest single opportunity
-           - Savings: ¥1,060,000/month total
-        """)
+            st.dataframe(artifact_df, hide_index=True, use_container_width=True)
+
+            manifest_rows = []
+            for artifact_name, prefix in (("Model", "model"), ("Preprocessor", "preprocessor")):
+                summary = status["artifact_status"].get(f"{prefix}_manifest_summary") or {}
+                if summary:
+                    manifest_rows.append(
+                        {
+                            "Artifact": artifact_name,
+                            "Artifact Version": summary.get("artifact_version_id"),
+                            "Trained At": summary.get("trained_at"),
+                            "Selected Model": summary.get("selected_model"),
+                            "Promotion Success": summary.get("promotion_success"),
+                        }
+                    )
+            if manifest_rows:
+                st.caption("Active artifact provenance manifests")
+                st.dataframe(pd.DataFrame(manifest_rows), hide_index=True, use_container_width=True)
 
 
-# Export functions for use in other modules
-# Note: render_live_predictions_tab, render_feature_insights_tab, and 
-# render_recommendations_tab are now in shared_ml_components.py
-__all__ = [
-    'render_ml_module',
-    'render_model_training_tab'
-]
-
-# Main execution
-if __name__ == "__main__":
-    st.set_page_config(
-        page_title="ML Module - Smart Manufacturing",
-        page_icon="🤖",
-        layout="wide"
+def _render_retraining_result(result: dict[str, object]) -> None:
+    st.subheader("Latest Canonical Retraining Result")
+    summary_df = pd.DataFrame(
+        [
+            {
+                "Active DB": _short_file_label(result["db_path"]),
+                "Rows Loaded": result["rows_loaded"],
+                "Rows After Hard Block": result["rows_after_hard_block"],
+                "Rows After Filtering": result["rows_after_filtering"],
+                "Distinct Machines": result["distinct_machines_after_filtering"],
+                "Month Coverage": ", ".join(result.get("month_coverage") or []),
+                "Evaluation Strategy": result.get("evaluation_strategy"),
+                "Train Months": ", ".join(result.get("train_months") or []),
+                "Eval Months": ", ".join(result.get("eval_months") or []),
+                "Selected Model": result["selected_model"],
+                "Training Source": result["training_source"],
+                "Promotion Success": result.get("promotion_success"),
+                "Artifact Decision": result.get("artifact_decision"),
+                "Artifact Version": result.get("artifact_version_id"),
+            }
+        ]
     )
-    
-    render_ml_module()
+    st.dataframe(summary_df, hide_index=True, use_container_width=True)
+
+    metrics_df = pd.DataFrame(
+        [
+            {
+                "Selected Model": result["selected_model"],
+                "R² Score": result["evaluation_metrics"]["r2_score"],
+                "MAE": result["evaluation_metrics"]["mae"],
+                "RMSE": result["evaluation_metrics"]["rmse"],
+            }
+        ]
+    )
+    st.dataframe(metrics_df, hide_index=True, use_container_width=True)
+
+    provenance_df = pd.DataFrame(
+        [
+            {
+                "Model File": _short_file_label(result["model_path"]),
+                "Preprocessor File": _short_file_label(result["preprocessor_path"]),
+                "Source Table": result["training_provenance"]["source_table"],
+                "Feature Contract": result.get("feature_contract_version"),
+            }
+        ]
+    )
+    st.dataframe(provenance_df, hide_index=True, use_container_width=True)
+
+    artifact_rows = [
+        {
+            "Artifact Set": "Candidate",
+            "Model File": _short_file_label(result["candidate_paths"]["model_path"]),
+            "Preprocessor File": _short_file_label(result["candidate_paths"]["preprocessor_path"]),
+            "Artifact Version": result.get("artifact_version_id"),
+        },
+        {
+            "Artifact Set": "Backup",
+            "Model File": _short_file_label(result["backup_paths"]["model_path"]),
+            "Preprocessor File": _short_file_label(result["backup_paths"]["preprocessor_path"]),
+            "Artifact Version": result.get("artifact_version_id"),
+        },
+    ]
+    st.dataframe(pd.DataFrame(artifact_rows), hide_index=True, use_container_width=True)
+
+    if result.get("promotion_gate"):
+        gate = result["promotion_gate"]
+        st.caption(
+            "Promotion gate: "
+            + ("passed" if gate.get("passed") else "blocked")
+            + (
+                ""
+                if gate.get("passed")
+                else f" ({', '.join(gate.get('failures') or [])})"
+            )
+        )
+    if result.get("predictor_smoke"):
+        smoke = result["predictor_smoke"]
+        st.caption(
+            "Predictor smoke: "
+            + ("passed" if smoke.get("passed") else "blocked")
+            + (
+                f" | source={smoke.get('prediction_source')}"
+                if smoke.get("prediction_source")
+                else ""
+            )
+        )
+    if result.get("artifact_decision_reason"):
+        st.caption(f"Artifact decision reason: {result['artifact_decision_reason']}")
+    if result.get("candidate_predictor_evaluation"):
+        st.caption("Candidate holdout predictor evaluation")
+        st.dataframe(pd.DataFrame([result["candidate_predictor_evaluation"]]), hide_index=True, use_container_width=True)
+    if result.get("active_predictor_evaluation"):
+        st.caption("Active holdout predictor evaluation")
+        st.dataframe(pd.DataFrame([result["active_predictor_evaluation"]]), hide_index=True, use_container_width=True)
+
+
+def _build_active_model_summary(status: dict[str, object]) -> dict[str, str]:
+    metadata = status.get("last_training_metadata") or {}
+    model_manifest = status.get("artifact_status", {}).get("model_manifest_summary") or {}
+    version = (
+        model_manifest.get("artifact_version_id")
+        or metadata.get("model_name")
+        or _short_file_label(status.get("model_path"))
+    )
+    trained_at = metadata.get("training_date") or model_manifest.get("trained_at")
+    return {
+        "model_version": str(version or "n/a"),
+        "trained_at": _format_timestamp_label(trained_at),
+        "r2_score": _format_metric_value(metadata.get("r2_score")),
+        "mae": _format_metric_value(metadata.get("mae")),
+    }
+
+
+def _render_scenario_lab(
+    candidate_df: pd.DataFrame,
+    prediction_df: pd.DataFrame,
+    predictor: MLPredictor,
+    review_queue_df: pd.DataFrame,
+    maintenance_reader: MaintenanceEvidenceReader,
+) -> None:
+    if candidate_df.empty or prediction_df.empty:
+        return
+    if not (getattr(predictor, "loaded_model", False) and getattr(predictor, "loaded_preprocessor", False)):
+        return
+
+    machine_options = _scenario_machine_options(review_queue_df, prediction_df)
+    if not machine_options:
+        return
+
+    with section_shell(
+        "Scenario Lab",
+        (
+            "Model evidence for one current-month review candidate. Use this page to inspect supported template comparisons "
+            "and why the active saved model suggests a direction. Move to `🎯 Operational Decision Support` for the operational worklist."
+        ),
+        eyebrow="Scenario Evidence",
+    ):
+        selected_machine = st.selectbox(
+            "Select review candidate",
+            options=machine_options,
+            key="ml_scenario_machine",
+        )
+        preview = build_machine_intervention_preview(
+            candidate_df,
+            prediction_df,
+            predictor,
+            selected_machine,
+        )
+        if preview["blocked"]:
+            st.info(str(preview["reason"]))
+            return
+
+        baseline = preview["baseline"]
+        supported_templates = [
+            scenario for scenario in preview["scenarios"] if scenario["status"] == "supported"
+        ]
+        best_scenario = preview["best_supported_scenario"]
+        summary_cards = [
+            build_surface_card(
+                "Baseline kWh / Unit",
+                f"{float(baseline['predicted_efficiency']):.4f}",
+                "Prediction from the active saved model on the selected seed row.",
+            ),
+            build_surface_card(
+                "Baseline Confidence",
+                f"{float(baseline['confidence']):.2f}",
+                f"Top driver: {baseline['top_driver']}",
+            ),
+            build_surface_card(
+                "Supported Templates",
+                f"{len(supported_templates)} / {len(preview['scenarios'])}",
+                "Only safe template paths are shown. Unsupported rows stay visible and honest.",
+            ),
+            build_surface_card(
+                "Best Supported Scenario",
+                "n/a" if best_scenario is None else str(best_scenario["scenario_name"]),
+                (
+                    "No supported template is available on the selected seed row."
+                    if best_scenario is None
+                    else f"{float(best_scenario['delta_vs_baseline']):+.4f} kWh / unit vs baseline"
+                ),
+            ),
+        ]
+        _render_card_grid(summary_cards, columns=4)
+
+        _render_maintenance_context_block(
+            selected_machine,
+            maintenance_reader,
+            description=(
+                "Direct maintenance-table context reused from `🔧 Maintenance`. "
+                "It enriches the review story but does not change queue ranking."
+            ),
+        )
+
+        st.caption(
+            f"Seed row: {preview['seed_timestamp_label']} | support path: {preview['support_path']} | "
+            f"task {preview['seed_task_difficulty']} | leader {preview['seed_team_leader']} | "
+            f"material {preview['seed_material_code']} | comparable production volume {preview['seed_production_qty']:.1f}"
+        )
+        if preview["adapter_notes"]:
+            st.caption(f"Adapter notes: {preview['adapter_notes']}")
+
+        st.info(
+            "Scenario Lab is a preview from the active saved model only. It is not an executed intervention, "
+            "a realized-savings claim, or a solver."
+        )
+
+        scenario_table = build_intervention_preview_table(preview)
+        if not scenario_table.empty:
+            scenario_table["Predicted kWh/Unit"] = scenario_table["Predicted kWh/Unit"].round(4)
+            scenario_table["Delta vs Baseline"] = scenario_table["Delta vs Baseline"].round(4)
+            scenario_table["Confidence"] = scenario_table["Confidence"].round(4)
+            scenario_table["Est. kWh Change @ Seed Volume"] = scenario_table[
+                "Est. kWh Change @ Seed Volume"
+            ].round(4)
+            st.dataframe(
+                scenario_table,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        st.caption(
+            "Template scope remains intentionally narrow: `Maintenance Refresh`, `Crew Support +1`, and "
+            "`Combined Support`. Unsupported scenarios remain visible instead of being fabricated."
+        )
+
+
+def _render_review_priority_chart(review_queue_df: pd.DataFrame) -> None:
+    chart_df = review_queue_df.head(10).copy()
+    if chart_df.empty:
+        return
+
+    chart_df = chart_df.sort_values("review_priority_score", ascending=True)
+    fig = px.bar(
+        chart_df,
+        x="review_priority_score",
+        y="machine_id",
+        color="support_path",
+        orientation="h",
+        title="Top Review Priority Score",
+        labels={
+            "review_priority_score": "Review Priority Score",
+            "machine_id": "Machine",
+            "support_path": "Support Path",
+        },
+        color_discrete_map={
+            "Direct canonical row": "#0f766e",
+            "Adapted row": "#0369a1",
+            "Defaulted row": "#b45309",
+        },
+    )
+    fig.update_layout(legend_title_text="Support Path", height=420)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_inference_coverage_bar(coverage_df: pd.DataFrame) -> None:
+    if coverage_df.empty:
+        return
+
+    fig = go.Figure()
+    for _, row in coverage_df.iterrows():
+        label = str(row["coverage_bucket"])
+        support_path = str(row["support_path"])
+        fig.add_bar(
+            name=label,
+            x=[int(row["rows"])],
+            y=["Selected month"],
+            orientation="h",
+            marker_color=_coverage_accent(support_path),
+            text=[f"{int(row['rows']):,} ({_format_ratio(row['share'])})"],
+            textposition="inside" if float(row["share"]) >= 0.12 else "outside",
+            hovertemplate=(
+                f"{label}<br>"
+                f"Rows: {int(row['rows']):,}<br>"
+                f"Share: {_format_ratio(row['share'])}<extra></extra>"
+            ),
+        )
+    fig.update_layout(
+        barmode="stack",
+        height=220,
+        xaxis_title="Rows",
+        yaxis_title="",
+        legend_title_text="Support Path",
+        margin=dict(l=20, r=20, t=20, b=20),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _build_review_queue_display(review_queue_df: pd.DataFrame) -> pd.DataFrame:
+    if review_queue_df.empty:
+        return pd.DataFrame()
+
+    display_df = review_queue_df.loc[
+        :,
+        [
+            "machine_id",
+            "support_path",
+            "predicted_efficiency",
+            "comparable_baseline",
+            "estimated_excess_kwh",
+            "confidence",
+            "review_priority_score",
+            "top_driver",
+            "preview_available",
+            "recommended_review_note",
+        ],
+    ].copy()
+    display_df["predicted_efficiency"] = display_df["predicted_efficiency"].round(4)
+    display_df["comparable_baseline"] = display_df["comparable_baseline"].round(4)
+    display_df["estimated_excess_kwh"] = display_df["estimated_excess_kwh"].round(2)
+    display_df["confidence"] = display_df["confidence"].round(4)
+    display_df["review_priority_score"] = display_df["review_priority_score"].round(2)
+    display_df["preview_available"] = display_df["preview_available"].map({True: "Yes", False: "No"})
+    return display_df.rename(
+        columns={
+            "machine_id": "Machine",
+            "support_path": "Support Path",
+            "predicted_efficiency": "Predicted kWh / Unit",
+            "comparable_baseline": "Comparable Baseline",
+            "estimated_excess_kwh": "Excess @ Seed Volume",
+            "confidence": "Confidence",
+            "review_priority_score": "Review Priority Score",
+            "top_driver": "Top Driver",
+            "preview_available": "Preview Available",
+            "recommended_review_note": "Recommended Review Note",
+        }
+    )
+
+
+def _build_blocked_detail_display(blocked_df: pd.DataFrame) -> pd.DataFrame:
+    if blocked_df.empty:
+        return pd.DataFrame()
+
+    display_df = blocked_df.loc[
+        :,
+        [
+            "machine_id",
+            "datetime",
+            "blocked_reason",
+            "adapter_notes",
+            "material_code",
+            "team_leader",
+            "production_qty",
+            "hours_since_last_maintenance",
+        ],
+    ].copy()
+    display_df["blocked_reason_label"] = display_df["blocked_reason"].apply(
+        lambda value: describe_blocked_reason(value)["label"]
+    )
+    display_df["production_qty"] = pd.to_numeric(display_df["production_qty"], errors="coerce").round(2)
+    display_df["hours_since_last_maintenance"] = pd.to_numeric(
+        display_df["hours_since_last_maintenance"], errors="coerce"
+    ).round(2)
+    return display_df.rename(
+        columns={
+            "machine_id": "Machine",
+            "datetime": "Timestamp",
+            "blocked_reason_label": "Blocked Reason",
+            "blocked_reason": "Blocked Reason Code",
+            "adapter_notes": "Adapter Notes",
+            "material_code": "Material",
+            "team_leader": "Team Leader",
+            "production_qty": "Production Qty",
+            "hours_since_last_maintenance": "Hours Since Maintenance",
+        }
+    )
+
+
+def _build_prediction_audit_display(
+    candidate_df: pd.DataFrame,
+    prediction_df: pd.DataFrame,
+) -> pd.DataFrame:
+    if prediction_df.empty:
+        return pd.DataFrame()
+
+    support_df = candidate_df.loc[:, ["machine_id", "datetime", "adapter_notes"]].copy()
+    support_df["support_path"] = support_df.apply(_candidate_support_label, axis=1)
+    display_df = prediction_df.merge(
+        support_df.loc[:, ["machine_id", "datetime", "support_path"]],
+        on=["machine_id", "datetime"],
+        how="left",
+    )
+    display_df["predicted_efficiency"] = display_df["predicted_efficiency"].round(4)
+    display_df["confidence"] = display_df["confidence"].round(4)
+    display_df["production_qty"] = display_df["production_qty"].round(2)
+    display_df["hours_since_last_maintenance"] = display_df["hours_since_last_maintenance"].round(2)
+    return display_df.loc[
+        :,
+        [
+            "machine_id",
+            "datetime",
+            "support_path",
+            "predicted_efficiency",
+            "confidence",
+            "top_driver",
+            "production_qty",
+            "task_difficulty",
+            "team_leader",
+            "material_code",
+        ],
+    ].rename(
+        columns={
+            "machine_id": "Machine",
+            "datetime": "Timestamp",
+            "support_path": "Support Path",
+            "predicted_efficiency": "Predicted kWh / Unit",
+            "confidence": "Confidence",
+            "top_driver": "Top Driver",
+            "production_qty": "Production Qty",
+            "task_difficulty": "Task Difficulty",
+            "team_leader": "Team Leader",
+            "material_code": "Material",
+        }
+    )
+
+
+def _scenario_machine_options(
+    review_queue_df: pd.DataFrame,
+    prediction_df: pd.DataFrame,
+) -> list[str]:
+    if not review_queue_df.empty:
+        preview_ready_df = review_queue_df[review_queue_df["preview_available"]].copy()
+        ordered_df = preview_ready_df if not preview_ready_df.empty else review_queue_df
+        options = ordered_df["machine_id"].dropna().astype(str).tolist()
+        if options:
+            return options
+    return prediction_df.sort_values(["machine_id", "datetime"])["machine_id"].dropna().astype(str).tolist()
+
+
+def _render_maintenance_context_block(
+    machine_id: str,
+    maintenance_reader: MaintenanceEvidenceReader,
+    *,
+    description: str,
+) -> None:
+    with section_shell(
+        "Maintenance Evidence Context",
+        description,
+        eyebrow="Evidence Chain",
+    ):
+        payload = maintenance_reader.build_machine_context_payload(machine_id)
+        if not payload["available"]:
+            st.info(str(payload["reason"]))
+            return
+
+        cards = [
+            build_surface_card(
+                "Days Since Last Maintenance",
+                _format_optional_int(payload["days_since_last_maintenance"]),
+                f"Latest stored maintenance: {payload['latest_maintenance_datetime_label']}",
+            ),
+            build_surface_card(
+                "Total Events",
+                f"{int(payload['total_events']):,}",
+                "All stored matched maintenance events for this machine.",
+            ),
+            build_surface_card(
+                "PM Ratio (All Time)",
+                _format_optional_ratio(payload["pm_ratio_all_time"]),
+                "PM rows divided by all stored matched events.",
+            ),
+            build_surface_card(
+                "Recent Events Shown",
+                f"{int(payload['recent_events_shown']):,}",
+                payload["history_window_note"],
+            ),
+            build_surface_card(
+                "Latest Work Order Type",
+                str(payload["latest_work_order_type"]),
+                f"Months covered: {int(payload['months_covered_count']):,}",
+            ),
+        ]
+        _render_card_grid(cards, columns=5)
+
+
+def _blocked_reason_snapshot_text(blocked_summary_df: pd.DataFrame) -> str:
+    if blocked_summary_df.empty:
+        return "Blocked rows remain visible as supporting evidence. No blocked rows are present for the selected month."
+
+    top_rows = blocked_summary_df.head(2)
+    top_text = ", ".join(
+        f"{row.get('blocked_reason_label', row['blocked_reason'])} ({int(row['row_count']):,}, {_format_ratio(row['share'])})"
+        for _, row in top_rows.iterrows()
+    )
+    return (
+        "Blocked rows remain visible as supporting evidence. "
+        f"Top current-month blockers: {top_text}."
+    )
+
+
+def _coverage_accent(support_path: str) -> str:
+    if support_path == "Direct canonical row":
+        return "#0f766e"
+    if support_path == "Adapted row":
+        return "#0369a1"
+    if support_path == "Defaulted row":
+        return "#b45309"
+    return "#94a3b8"
+
+
+def _format_optional_ratio(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{float(value) * 100:.1f}%"
+
+
+def _format_optional_int(value: int | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{int(value):,}"
+
+
+def _run_what_if_prediction(
+    seed_row: pd.Series,
+    overrides: dict[str, object],
+    predictor: MLPredictor,
+) -> dict[str, object]:
+    return run_intervention_prediction(seed_row, overrides, predictor)
+
+
+def _candidate_support_label(row: pd.Series) -> str:
+    return candidate_support_label(row)
+
+
+def _render_card_grid(cards: list[dict[str, str]], *, columns: int) -> None:
+    for start_index in range(0, len(cards), columns):
+        row_cards = cards[start_index : start_index + columns]
+        row_columns = st.columns(columns)
+        for column, card in zip(row_columns, row_cards):
+            with column:
+                render_surface_card(card)
+
+
+def _format_metric_value(value: object) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{float(value):.3f}"
+
+
+def _format_ratio(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{float(value) * 100:.1f}%"
+
+
+def _format_timestamp_label(value: object) -> str:
+    if value is None:
+        return "n/a"
+    timestamp = pd.to_datetime(value, errors="coerce")
+    if pd.isna(timestamp):
+        return str(value)
+    return timestamp.strftime("%Y-%m-%d")
+
+
+def _short_file_label(path_value: object) -> str:
+    if not path_value:
+        return "n/a"
+    return Path(str(path_value)).name or str(path_value)

@@ -7,21 +7,352 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import json
-from datetime import datetime
+import re
+from collections import Counter
+from datetime import date, datetime
+from io import BytesIO
 import os
 from pathlib import Path
 
-# Import the existing ETL solution
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.bronze_raw_store import BronzeRawStore
+from core.canonical_materializer import CanonicalMaterializer
 from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
+from core.runtime_capabilities import suppress_write_controls
+from core.runtime_mode import normalize_runtime_mode
+from core.runtime_paths import (
+    get_csi_dataset_dir,
+    get_data_dir,
+    get_database_path,
+    get_energy_dataset_dir,
+    get_extended_raw_dataset_root,
+    get_mes_dataset_dir,
+    get_raw_dataset_root,
+    get_repo_root,
+)
+
+
+MONTH_NAME_OPTIONS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+MONTH_ALIAS_TO_NAME = {
+    "jan": "January",
+    "january": "January",
+    "feb": "February",
+    "february": "February",
+    "mar": "March",
+    "march": "March",
+    "apr": "April",
+    "april": "April",
+    "may": "May",
+    "jun": "June",
+    "june": "June",
+    "jul": "July",
+    "july": "July",
+    "aug": "August",
+    "august": "August",
+    "sep": "September",
+    "sept": "September",
+    "september": "September",
+    "oct": "October",
+    "october": "October",
+    "nov": "November",
+    "november": "November",
+    "dec": "December",
+    "december": "December",
+}
+
+MONTH_TOKEN_PATTERN = re.compile(
+    r"(?<![a-z])("
+    + "|".join(sorted(MONTH_ALIAS_TO_NAME.keys(), key=len, reverse=True))
+    + r")(?![a-z])",
+    re.IGNORECASE,
+)
+YEAR_TOKEN_PATTERN = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+TEXTUAL_MONTH_YEAR_PATTERN = re.compile(
+    r"("
+    + "|".join(sorted(MONTH_ALIAS_TO_NAME.keys(), key=len, reverse=True))
+    + r")[\s_\-/.,]*(20\d{2})",
+    re.IGNORECASE,
+)
+NUMERIC_MONTH_YEAR_PATTERN = re.compile(
+    r"(20\d{2})\s*[-/_.年]\s*(1[0-2]|0?[1-9])(?:\s*[月/_.-])?",
+    re.IGNORECASE,
+)
+CHINESE_MONTH_PATTERN = re.compile(r"(?<!\d)(1[0-2]|0?[1-9])\s*月")
+
+EXTENSION_MONTH_SOURCE_MAPPINGS = {
+    "July 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表__2025.7.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年7月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "complete", "csi": "complete", "mes": "complete"},
+        "notes": [
+            "July 2025 CSI is accepted after direct file audit; the earlier Aug-start wording was inconsistent with the actual source package.",
+        ],
+    },
+    "August 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年8月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "partial", "csi": "complete", "mes": "complete"},
+        "notes": [
+            "Energy remains usable but excludes the 2025-08-17 08:00-17:00 sentinel anomaly rows for 1024-10032/024-147印刷機UV.",
+        ],
+    },
+    "September 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年9月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "complete", "csi": "complete", "mes": "complete"},
+        "notes": [],
+    },
+    "October 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年10月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "partial", "csi": "complete", "mes": "complete"},
+        "notes": [
+            "Energy contains localized partial meter-month cases in October 2025 and is accepted with explicit flags rather than a global block.",
+        ],
+    },
+    "November 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2025.11-12.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年11月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "partial", "csi": "complete", "mes": "complete"},
+        "notes": [
+            "Energy contains a localized November 2025 partial meter-month case for 印刷機1024-10009（IR+UV）.",
+        ],
+    },
+    "December 2025": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2025.11-12.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年12月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "complete", "csi": "complete", "mes": "complete"},
+        "notes": [],
+    },
+    "January 2026": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2026年1月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "partial", "csi": "complete", "mes": "complete"},
+        "notes": [
+            "Energy contains localized January 2026 partial meter-month cases and is accepted with flags.",
+        ],
+    },
+    "February 2026": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"],
+        "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2026年2月.xls",
+        "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+        "family_status": {"energy": "partial", "csi": "partial", "mes": "partial"},
+        "notes": [
+            "Energy contains localized February 2026 partial meter-month cases and is accepted with flags.",
+            "CSI/MES rows for unresolved machine 1262-00012 remain quarantined because no safe canonical mapping was proven in Task13.",
+        ],
+    },
+    "March 2026": {
+        "energy_files": ["Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"],
+        "csi_file": None,
+        "mes_file": None,
+        "family_status": {"energy": "blocked", "csi": "blocked", "mes": "blocked"},
+        "notes": [
+            "March 2026 is intentionally excluded from Task13 scope even though grouped energy files include March rows and MES status/create timestamps extend into early March.",
+        ],
+    },
+}
+
+
+def _month_bounds(month_year: str) -> tuple[pd.Timestamp, pd.Timestamp]:
+    parsed = datetime.strptime(month_year.strip(), "%B %Y")
+    start = pd.Timestamp(year=parsed.year, month=parsed.month, day=1)
+    if parsed.month == 12:
+        end = pd.Timestamp(year=parsed.year + 1, month=1, day=1)
+    else:
+        end = pd.Timestamp(year=parsed.year, month=parsed.month + 1, day=1)
+    return start, end
+
+
+def _series_in_target_month(series: pd.Series, month_year: str) -> pd.Series:
+    start, end = _month_bounds(month_year)
+    parsed = pd.to_datetime(series, errors="coerce")
+    return (parsed >= start) & (parsed < end)
+
+
+def _scope_source_dataframe_to_month(df: pd.DataFrame | None, source_kind: str, month_year: str) -> pd.DataFrame | None:
+    if df is None:
+        return None
+    if df.empty:
+        return df.copy()
+
+    if source_kind == "energy":
+        if "datetime" not in df.columns:
+            return df.iloc[0:0].copy()
+        mask = _series_in_target_month(df["datetime"], month_year)
+    elif source_kind == "csi":
+        mask = pd.Series(False, index=df.index)
+        for column_name in ("工程開始時間", "工程結束時間", "準備結束時間", "班次內日期"):
+            if column_name in df.columns:
+                mask = mask | _series_in_target_month(df[column_name], month_year)
+    elif source_kind == "mes":
+        if "報工時間" not in df.columns:
+            return df.iloc[0:0].copy()
+        mask = _series_in_target_month(df["報工時間"], month_year)
+    else:
+        return df.copy()
+
+    return df.loc[mask].copy()
+
+
+def _scope_etl_state_to_month(etl, month_year: str) -> None:
+    if not hasattr(etl, "state"):
+        return
+    etl.state.energy_data = _scope_source_dataframe_to_month(etl.state.energy_data, "energy", month_year)
+    etl.state.csi_data = _scope_source_dataframe_to_month(etl.state.csi_data, "csi", month_year)
+    etl.state.mes_data = _scope_source_dataframe_to_month(etl.state.mes_data, "mes", month_year)
+    etl.state.energy_aggregated = None
+    etl.state.machine_mapping = None
+    etl.state.partial_matches = None
+    etl.state.integrated_metrics = None
+
+
+def _uploaded_file_suffix(uploaded_file, default_suffix: str = ".xlsx") -> str:
+    filename = str(getattr(uploaded_file, "name", "") or "").strip()
+    suffix = Path(filename).suffix.lower()
+    return suffix if suffix in {".xls", ".xlsx", ".xlsm"} else default_suffix
+
+
+def _resolve_default_data_root_for_month(month_year: str) -> Path:
+    if month_year in EXTENSION_MONTH_SOURCE_MAPPINGS:
+        return get_extended_raw_dataset_root()
+    return get_raw_dataset_root()
+
+
+def _resolve_extension_source_mapping(month_year: str, data_root: Path | str | None = None) -> dict[str, object]:
+    spec = EXTENSION_MONTH_SOURCE_MAPPINGS[month_year]
+    dataset_root = Path(data_root) if data_root is not None else get_extended_raw_dataset_root()
+    resolved = {
+        "dataset_root": str(dataset_root),
+        "energy_files": [str(dataset_root / relative_path) for relative_path in spec["energy_files"]],
+        "csi_file": str(dataset_root / spec["csi_file"]) if spec.get("csi_file") else None,
+        "mes_file": str(dataset_root / spec["mes_file"]) if spec.get("mes_file") else None,
+        "family_status": dict(spec["family_status"]),
+        "notes": list(spec["notes"]),
+    }
+    family_status = resolved["family_status"]
+    if all(status == "complete" for status in family_status.values()):
+        resolved["backfill_readiness"] = "ready"
+    elif any(status == "blocked" for status in family_status.values()):
+        resolved["backfill_readiness"] = "blocked"
+    else:
+        resolved["backfill_readiness"] = "ready_with_flags"
+    return resolved
+
+
+def _build_extension_source_availability_dataframe(data_root: Path | str | None = None) -> pd.DataFrame:
+    rows = []
+    for month_year in EXTENSION_MONTH_SOURCE_MAPPINGS:
+        mapping = _resolve_extension_source_mapping(month_year, data_root=data_root)
+        file_candidates = [
+            *mapping["energy_files"],
+            *( [mapping["csi_file"]] if mapping.get("csi_file") else [] ),
+            *( [mapping["mes_file"]] if mapping.get("mes_file") else [] ),
+        ]
+        missing_files = [path for path in file_candidates if path and not Path(path).exists()]
+        rows.append(
+            {
+                "Month": month_year,
+                "Energy": mapping["family_status"]["energy"].title(),
+                "CSI": mapping["family_status"]["csi"].title(),
+                "MES": mapping["family_status"]["mes"].title(),
+                "Backfill Readiness": (
+                    "Blocked"
+                    if missing_files or mapping["backfill_readiness"] == "blocked"
+                    else "Ready with Flags"
+                    if mapping["backfill_readiness"] == "ready_with_flags"
+                    else "Ready"
+                ),
+                "Notes": " | ".join(mapping["notes"]) or "none",
+                "Missing Files": " | ".join(missing_files) or "none",
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 class ETLPipelineModule:
-    def __init__(self, db_path='manufacturing_data.db'):
-        self.db_path = db_path
-        self.init_database()
+    HISTORICAL_MONTH_FILE_MAPPINGS = {
+        "January": {
+            "energy": [
+                "能耗、費用報表Jan(1-10).xlsx",
+                "能耗、費用報表Jan(11-21).xlsx",
+                "能耗、費用報表Jan(22-31).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表Jan.xlsx",
+            "mes": "MES生產數據Jan(Printer).xlsx",
+        },
+        "February": {
+            "energy": [
+                "能耗、費用報表Feb(1-10).xlsx",
+                "能耗、費用報表Feb(11-21).xlsx",
+                "能耗、費用報表Feb(22-28).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表Feb.xlsx",
+            "mes": "MES生產數據Feb(Printer).xlsx",
+        },
+        "March": {
+            "energy": [
+                "能耗、費用報表March(1-10).xlsx",
+                "能耗、費用報表March(11-21).xlsx",
+                "能耗、費用報表March(22-31).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表March.xlsx",
+            "mes": "MES生產數據March(Printer).xlsx",
+        },
+        "April": {
+            "energy": [
+                "能耗、費用報表April(1-10).xlsx",
+                "能耗、費用報表April(11-21).xlsx",
+                "能耗、費用報表April(22-30).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表April.xlsx",
+            "mes": "MES生產數據April(Printer).xlsx",
+        },
+        "May": {
+            "energy": [
+                "能耗、費用報表May(1-31).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表May.xlsx",
+            "mes": "MES生產數據May(Printer).xlsx",
+        },
+        "June": {
+            "energy": [
+                "能耗、費用報表June(1-30).xlsx",
+            ],
+            "csi": "CSI印刷心電圖報表June.xlsx",
+            "mes": "MES生產數據June(Printer).xlsx",
+        },
+    }
+    MAINTENANCE_FILE_CANDIDATES = (
+        "印刷機維修記錄清單（2025年全年）.xlsx",
+        "Maintenance RecordJan to Jul.xlsx",
+    )
+
+    def __init__(self, db_path=None, *, initialize_schema: bool = True):
+        self.db_path = str(db_path or get_database_path())
+        self.bronze_store = BronzeRawStore(self.db_path) if initialize_schema else None
+        if initialize_schema:
+            self.init_database()
         
     def init_database(self):
         """Initialize SQLite database with required tables"""
@@ -93,11 +424,144 @@ class ETLPipelineModule:
         
         conn.commit()
         conn.close()
-    
+
+    def get_historical_month_file_mappings(self, data_root=None):
+        dataset_root = Path(data_root) if data_root is not None else get_raw_dataset_root()
+        energy_dir = get_energy_dataset_dir(dataset_root)
+        csi_dir = get_csi_dataset_dir(dataset_root)
+        mes_dir = get_mes_dataset_dir(dataset_root)
+
+        resolved = {}
+        for month_name, file_mapping in self.HISTORICAL_MONTH_FILE_MAPPINGS.items():
+            resolved[f"{month_name} 2025"] = {
+                "dataset_root": str(dataset_root),
+                "energy_files": [str(energy_dir / file_name) for file_name in file_mapping["energy"]],
+                "csi_file": str(csi_dir / file_mapping["csi"]),
+                "mes_file": str(mes_dir / file_mapping["mes"]),
+                "maintenance_file": self._resolve_historical_maintenance_file(dataset_root),
+            }
+        for month_year in EXTENSION_MONTH_SOURCE_MAPPINGS:
+            resolved[month_year] = _resolve_extension_source_mapping(month_year, data_root=data_root)
+        return resolved
+
+    def resolve_historical_month_sources(self, month_year, data_root=None):
+        month_key = month_year.strip()
+        historical_mappings = self.get_historical_month_file_mappings(data_root)
+        if month_key not in historical_mappings:
+            raise ValueError(f"No historical source mapping is defined for {month_key}.")
+
+        source_files = historical_mappings[month_key]
+        if source_files.get("backfill_readiness") == "blocked":
+            notes = source_files.get("notes") or ["The requested month is explicitly blocked for controlled backfill."]
+            raise ValueError(
+                f"Historical backfill is blocked for {month_key}: {' '.join(notes)}"
+            )
+        missing_files = [
+            file_path
+            for file_path in [
+                *source_files["energy_files"],
+                *( [source_files["csi_file"]] if source_files.get("csi_file") else [] ),
+                *( [source_files["mes_file"]] if source_files.get("mes_file") else [] ),
+            ]
+            if not Path(file_path).exists()
+        ]
+        if missing_files:
+            raise ValueError(
+                "Historical backfill cannot run because source files are missing for "
+                f"{month_key}: {', '.join(missing_files)}"
+            )
+
+        return source_files
+
+    def build_extension_source_availability(self, data_root=None):
+        return _build_extension_source_availability_dataframe(data_root=data_root)
+
+    def run_historical_canonical_backfill(self, month_years, data_root=None):
+        requested_months = [month for month in month_years if str(month).strip()]
+        if not requested_months:
+            return {
+                "status": "error",
+                "requested_months": [],
+                "monthly_results": [],
+                "failed_months": [],
+                "legacy_unified_view_bypassed": True,
+                "message": "No historical months were requested.",
+            }
+
+        materializer = CanonicalMaterializer(self.db_path)
+        monthly_results = []
+        failed_months = []
+
+        for month_year in requested_months:
+            try:
+                source_files = self.resolve_historical_month_sources(month_year, data_root=data_root)
+                etl = EnhancedSmartManufacturingETL()
+                etl.extract_all_sources(
+                    source_files["energy_files"],
+                    source_files["csi_file"],
+                    source_files["mes_file"],
+                )
+                _scope_etl_state_to_month(etl, month_year)
+                mapping_results = etl.create_comprehensive_mapping()
+                self.save_etl_results(mapping_results, month_year, etl)
+                canonical_result = materializer.materialize_backfill_month(month_year)
+                monthly_results.append(
+                    {
+                        "target_month": month_year,
+                        "source_files": source_files,
+                        "source_notes": list(source_files.get("notes") or []),
+                        "source_readiness": source_files.get("backfill_readiness"),
+                        "canonical_materialization": canonical_result,
+                    }
+                )
+            except Exception as exc:
+                failed_months.append(
+                    {
+                        "target_month": month_year,
+                        "message": str(exc),
+                    }
+                )
+
+        if failed_months and monthly_results:
+            status = "partial_error"
+        elif failed_months:
+            status = "error"
+        else:
+            status = "success"
+
+        return {
+            "status": status,
+            "requested_months": requested_months,
+            "successful_months": [result["target_month"] for result in monthly_results],
+            "failed_months": failed_months,
+            "monthly_results": monthly_results,
+            "legacy_unified_view_bypassed": True,
+        }
+
+    def _resolve_historical_maintenance_file(self, data_root):
+        dataset_root = Path(data_root)
+        maintenance_dirs = [
+            dataset_root / "(12:3:2026) Maintenance",
+            dataset_root,
+        ]
+        for parent in maintenance_dirs:
+            for file_name in self.MAINTENANCE_FILE_CANDIDATES:
+                candidate = parent / file_name
+                if candidate.exists():
+                    return str(candidate)
+        return None
+
     def save_etl_results(self, mapping_results, month_name, etl_instance=None):
         """Save ETL results to database including actual extracted data"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+
+        def ensure_table_columns(table_name, columns):
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            existing_columns = {column[1] for column in cursor.fetchall()}
+            for column_name, column_type in columns.items():
+                if column_name not in existing_columns:
+                    cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
         
         # Create tables for storing actual ETL data if they don't exist
         cursor.execute('''
@@ -107,9 +571,25 @@ class ETLPipelineModule:
                 pattern TEXT,
                 datetime TIMESTAMP,
                 electricity_kwh REAL,
-                machine_components TEXT
+                machine_components TEXT,
+                canonical_machine_id TEXT,
+                matched_on TEXT,
+                matched_value TEXT,
+                exception_applied INTEGER,
+                source_system TEXT,
+                scope_status TEXT,
+                join_status TEXT
             )
         ''')
+        ensure_table_columns('etl_energy_data', {
+            'canonical_machine_id': 'TEXT',
+            'matched_on': 'TEXT',
+            'matched_value': 'TEXT',
+            'exception_applied': 'INTEGER',
+            'source_system': 'TEXT',
+            'scope_status': 'TEXT',
+            'join_status': 'TEXT',
+        })
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS etl_csi_data (
@@ -129,9 +609,25 @@ class ETLPipelineModule:
                 team_member_1 TEXT,
                 team_member_2 TEXT,
                 team_member_3 TEXT,
-                team_member_4 TEXT
+                team_member_4 TEXT,
+                canonical_machine_id TEXT,
+                matched_on TEXT,
+                matched_value TEXT,
+                exception_applied INTEGER,
+                source_system TEXT,
+                scope_status TEXT,
+                join_status TEXT
             )
         ''')
+        ensure_table_columns('etl_csi_data', {
+            'canonical_machine_id': 'TEXT',
+            'matched_on': 'TEXT',
+            'matched_value': 'TEXT',
+            'exception_applied': 'INTEGER',
+            'source_system': 'TEXT',
+            'scope_status': 'TEXT',
+            'join_status': 'TEXT',
+        })
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS etl_mes_data (
@@ -143,19 +639,58 @@ class ETLPipelineModule:
                 material_code TEXT,
                 planned_qty REAL,
                 planned_start TIMESTAMP,
-                planned_end TIMESTAMP
+                planned_end TIMESTAMP,
+                canonical_machine_id TEXT,
+                matched_on TEXT,
+                matched_value TEXT,
+                exception_applied INTEGER,
+                source_system TEXT,
+                scope_status TEXT,
+                join_status TEXT
             )
         ''')
+        ensure_table_columns('etl_mes_data', {
+            'canonical_machine_id': 'TEXT',
+            'matched_on': 'TEXT',
+            'matched_value': 'TEXT',
+            'exception_applied': 'INTEGER',
+            'source_system': 'TEXT',
+            'scope_status': 'TEXT',
+            'join_status': 'TEXT',
+        })
         
         # Store the actual data if ETL instance is provided
         if etl_instance:
+            energy_data = _scope_source_dataframe_to_month(
+                getattr(etl_instance, "energy_data", None),
+                "energy",
+                month_name,
+            )
+            csi_data = _scope_source_dataframe_to_month(
+                getattr(etl_instance, "csi_data", None),
+                "csi",
+                month_name,
+            )
+            mes_data = _scope_source_dataframe_to_month(
+                getattr(etl_instance, "mes_data", None),
+                "mes",
+                month_name,
+            )
+
+            if energy_data is not None:
+                self.bronze_store.write_energy_rows(energy_data)
+            if csi_data is not None:
+                self.bronze_store.write_csi_rows(csi_data)
+            if mes_data is not None:
+                self.bronze_store.write_mes_rows(mes_data)
+
             # Clear existing data for this month
             cursor.execute("DELETE FROM etl_energy_data WHERE month_year = ?", (month_name,))
             cursor.execute("DELETE FROM etl_csi_data WHERE month_year = ?", (month_name,))
             cursor.execute("DELETE FROM etl_mes_data WHERE month_year = ?", (month_name,))
             
             # Store energy data - use original energy_data with machine mappings
-            if hasattr(etl_instance, 'energy_data') and etl_instance.energy_data is not None:
+            if energy_data is not None:
                 # Create a mapping from original machine names to patterns
                 machine_to_pattern = {}
                 if hasattr(etl_instance, 'energy_aggregated'):
@@ -165,9 +700,9 @@ class ETLPipelineModule:
                             machine_to_pattern[orig_name] = machine_id
                 
                 # Save the detailed energy data with patterns
-                for _, row in etl_instance.energy_data.iterrows():
+                for _, row in energy_data.iterrows():
                     machine_name = row.get('machine', '')
-                    pattern = machine_to_pattern.get(machine_name, '')
+                    pattern = row.get('canonical_machine_id') or machine_to_pattern.get(machine_name, '')
                     
                     # Skip if no pattern found (non-matched machines)
                     if not pattern:
@@ -175,25 +710,36 @@ class ETLPipelineModule:
                         
                     cursor.execute('''
                         INSERT INTO etl_energy_data 
-                        (month_year, pattern, datetime, electricity_kwh, machine_components)
-                        VALUES (?, ?, ?, ?, ?)
+                        (month_year, pattern, datetime, electricity_kwh, machine_components,
+                         canonical_machine_id, matched_on, matched_value, exception_applied,
+                         source_system, scope_status, join_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         month_name,
                         pattern,  # Use the mapped pattern
                         str(row.get('datetime', '')),  # Convert to string
                         float(row.get('electricity_kwh', 0)),  # Ensure float
-                        json.dumps([machine_name])  # Store original name as component
+                        json.dumps([machine_name]),  # Store original name as component
+                        row.get('canonical_machine_id'),
+                        row.get('matched_on'),
+                        row.get('matched_value'),
+                        int(bool(row.get('exception_applied', False))),
+                        row.get('source_system'),
+                        row.get('scope_status'),
+                        row.get('join_status'),
                     ))
             
             # Store CSI data
-            if hasattr(etl_instance, 'csi_data') and etl_instance.csi_data is not None:
-                for _, row in etl_instance.csi_data.iterrows():
+            if csi_data is not None:
+                for _, row in csi_data.iterrows():
                     cursor.execute('''
                         INSERT INTO etl_csi_data 
                         (month_year, machine_id, start_time, end_time, setup_start, setup_end,
                          material, order_id, good_qty, efficiency, actual_speed,
-                         team_leader, team_member_1, team_member_2, team_member_3, team_member_4)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         team_leader, team_member_1, team_member_2, team_member_3, team_member_4,
+                         canonical_machine_id, matched_on, matched_value, exception_applied,
+                         source_system, scope_status, join_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         month_name,
                         row.get('機台編號', ''),
@@ -210,17 +756,26 @@ class ETLPipelineModule:
                         row.get('機組人員姓名1', ''),
                         row.get('機組人員姓名2', ''),
                         row.get('機組人員姓名3', ''),
-                        row.get('機組人員姓名4', '')
+                        row.get('機組人員姓名4', ''),
+                        row.get('canonical_machine_id'),
+                        row.get('matched_on'),
+                        row.get('matched_value'),
+                        int(bool(row.get('exception_applied', False))),
+                        row.get('source_system'),
+                        row.get('scope_status'),
+                        row.get('join_status'),
                     ))
             
             # Store MES data
-            if hasattr(etl_instance, 'mes_data') and etl_instance.mes_data is not None:
-                for _, row in etl_instance.mes_data.iterrows():
+            if mes_data is not None:
+                for _, row in mes_data.iterrows():
                     cursor.execute('''
                         INSERT INTO etl_mes_data 
                         (month_year, resource, task, order_number, material_code,
-                         planned_qty, planned_start, planned_end)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                         planned_qty, planned_start, planned_end, canonical_machine_id,
+                         matched_on, matched_value, exception_applied, source_system,
+                         scope_status, join_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         month_name,
                         row.get('資源', ''),
@@ -229,7 +784,14 @@ class ETLPipelineModule:
                         row.get('物料編碼', ''),
                         row.get('計劃數量', 0),
                         row.get('計劃開始'),
-                        row.get('計劃結束')
+                        row.get('計劃結束'),
+                        row.get('canonical_machine_id'),
+                        row.get('matched_on'),
+                        row.get('matched_value'),
+                        int(bool(row.get('exception_applied', False))),
+                        row.get('source_system'),
+                        row.get('scope_status'),
+                        row.get('join_status'),
                     ))
         
         # Get the next display order
@@ -505,24 +1067,557 @@ class ETLPipelineModule:
         return df
 
 
-def render_etl_page():
+def _build_upload_signature(energy_files, csi_file, mes_file):
+    signature = []
+    for role, uploaded_file in [
+        *[("Energy", file) for file in energy_files],
+        ("CSI", csi_file),
+        ("MES", mes_file),
+    ]:
+        if uploaded_file is None:
+            continue
+        signature.append(
+            (
+                role,
+                getattr(uploaded_file, "name", None),
+                getattr(uploaded_file, "size", None),
+            )
+        )
+    return tuple(signature)
+
+
+def _normalize_month_name(month_value):
+    if month_value is None:
+        return None
+    cleaned = str(month_value).strip()
+    if not cleaned:
+        return None
+    return MONTH_ALIAS_TO_NAME.get(cleaned.lower(), cleaned if cleaned in MONTH_NAME_OPTIONS else None)
+
+
+def _extract_month_year_candidates_from_text(text_value):
+    if text_value is None:
+        return []
+    text = str(text_value).strip()
+    if not text:
+        return []
+
+    candidates = []
+    for month_match, year_match in TEXTUAL_MONTH_YEAR_PATTERN.findall(text):
+        month_name = _normalize_month_name(month_match)
+        if month_name is None:
+            continue
+        year = int(year_match)
+        if 2020 <= year <= 2035:
+            candidates.append((month_name, year))
+
+    for year_match, month_match in NUMERIC_MONTH_YEAR_PATTERN.findall(text):
+        month_num = int(month_match)
+        if 1 <= month_num <= 12:
+            candidates.append((MONTH_NAME_OPTIONS[month_num - 1], int(year_match)))
+
+    return candidates
+
+
+def _detect_month_year_from_filename(filename):
+    normalized_name = Path(filename).name
+    month_name = None
+    year = None
+
+    month_match = MONTH_TOKEN_PATTERN.search(normalized_name.lower())
+    if month_match:
+        month_name = _normalize_month_name(month_match.group(1))
+    else:
+        chinese_month_match = CHINESE_MONTH_PATTERN.search(normalized_name)
+        if chinese_month_match:
+            month_name = MONTH_NAME_OPTIONS[int(chinese_month_match.group(1)) - 1]
+
+    year_match = YEAR_TOKEN_PATTERN.search(normalized_name)
+    if year_match:
+        year = int(year_match.group(1))
+
+    if month_name and year is not None:
+        confidence = "high"
+        note = "Matched month and year in filename."
+    elif month_name:
+        confidence = "medium"
+        note = "Matched month in filename; year still needs confirmation."
+    elif year is not None:
+        confidence = "low"
+        note = "Matched year in filename only; month still needs confirmation."
+    else:
+        confidence = "none"
+        note = "No reliable month/year tokens found in filename."
+
+    return {
+        "month": month_name,
+        "year": year,
+        "source": "filename",
+        "confidence": confidence,
+        "note": note,
+    }
+
+
+def _detect_month_year_from_excel_sample(uploaded_file):
+    suffix = Path(getattr(uploaded_file, "name", "")).suffix.lower()
+    if suffix not in {".xlsx", ".xlsm"}:
+        return {
+            "month": None,
+            "year": None,
+            "source": "workbook sample",
+            "confidence": "none",
+            "status": "skipped",
+            "note": "Workbook sample fallback is only used for .xlsx/.xlsm files.",
+        }
+
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(
+            filename=BytesIO(uploaded_file.getvalue()),
+            read_only=True,
+            data_only=True,
+        )
+    except Exception as exc:
+        return {
+            "month": None,
+            "year": None,
+            "source": "workbook sample",
+            "confidence": "none",
+            "status": "error",
+            "note": f"Workbook sample fallback could not open the file: {exc}",
+        }
+
+    candidates = Counter()
+    try:
+        for sheet_name in workbook.sheetnames[:3]:
+            worksheet = workbook[sheet_name]
+            for row in worksheet.iter_rows(max_row=120, max_col=24, values_only=True):
+                for value in row:
+                    if isinstance(value, (datetime, pd.Timestamp)):
+                        month_name = MONTH_NAME_OPTIONS[value.month - 1]
+                        if 2020 <= value.year <= 2035:
+                            candidates[(month_name, value.year)] += 1
+                    elif isinstance(value, date):
+                        month_name = MONTH_NAME_OPTIONS[value.month - 1]
+                        if 2020 <= value.year <= 2035:
+                            candidates[(month_name, value.year)] += 1
+                    elif isinstance(value, str):
+                        for candidate in _extract_month_year_candidates_from_text(value):
+                            candidates[candidate] += 1
+    finally:
+        workbook.close()
+
+    if not candidates:
+        return {
+            "month": None,
+            "year": None,
+            "source": "workbook sample",
+            "confidence": "none",
+            "status": "unresolved",
+            "note": "Workbook sample did not expose one stable month/year candidate.",
+        }
+
+    if len(candidates) == 1:
+        (month_name, year), count = candidates.most_common(1)[0]
+        confidence = "high" if count >= 3 else "medium"
+        return {
+            "month": month_name,
+            "year": year,
+            "source": "workbook sample",
+            "confidence": confidence,
+            "status": "resolved",
+            "note": f"Workbook sample consistently points to {month_name} {year}.",
+        }
+
+    (month_name, year), count = candidates.most_common(1)[0]
+    total_hits = sum(candidates.values())
+    if total_hits and count / total_hits >= 0.8 and count >= 3:
+        return {
+            "month": month_name,
+            "year": year,
+            "source": "workbook sample",
+            "confidence": "medium",
+            "status": "resolved",
+            "note": (
+                f"Workbook sample mostly points to {month_name} {year}; "
+                f"{count}/{total_hits} sampled date hits agree."
+            ),
+        }
+
+    candidate_text = ", ".join(
+        f"{candidate_month} {candidate_year}" for (candidate_month, candidate_year), _ in candidates.most_common(3)
+    )
+    return {
+        "month": None,
+        "year": None,
+        "source": "workbook sample",
+        "confidence": "low",
+        "status": "ambiguous",
+        "note": f"Workbook sample exposed multiple month/year candidates: {candidate_text}.",
+    }
+
+
+def _resolve_uploaded_file_detection(uploaded_file, role_label):
+    filename_detection = _detect_month_year_from_filename(uploaded_file.name)
+    workbook_detection = None
+
+    needs_workbook_fallback = filename_detection["month"] is None or filename_detection["year"] is None
+    if needs_workbook_fallback:
+        workbook_detection = _detect_month_year_from_excel_sample(uploaded_file)
+
+    resolved_month = filename_detection["month"]
+    resolved_year = filename_detection["year"]
+    source_parts = []
+    note_parts = [filename_detection["note"]]
+    conflict_notes = []
+
+    if resolved_month or resolved_year is not None:
+        source_parts.append("filename")
+
+    if workbook_detection is not None:
+        note_parts.append(workbook_detection["note"])
+        workbook_month = workbook_detection.get("month")
+        workbook_year = workbook_detection.get("year")
+        if (
+            resolved_month is not None
+            and workbook_month is not None
+            and resolved_month != workbook_month
+        ):
+            conflict_notes.append(
+                f"Filename month `{resolved_month}` disagrees with workbook sample `{workbook_month}`."
+            )
+        elif resolved_month is None and workbook_month is not None:
+            resolved_month = workbook_month
+            source_parts.append("workbook sample")
+
+        if (
+            resolved_year is not None
+            and workbook_year is not None
+            and resolved_year != workbook_year
+        ):
+            conflict_notes.append(
+                f"Filename year `{resolved_year}` disagrees with workbook sample `{workbook_year}`."
+            )
+        elif resolved_year is None and workbook_year is not None:
+            resolved_year = workbook_year
+            source_parts.append("workbook sample")
+
+    unique_source_parts = list(dict.fromkeys(source_parts))
+    note_parts.extend(conflict_notes)
+    if conflict_notes:
+        status = "conflict"
+        confidence = "low"
+    elif resolved_month and resolved_year is not None:
+        status = "resolved"
+        confidence = "high"
+    elif resolved_month or resolved_year is not None:
+        status = "partial"
+        confidence = "medium"
+    else:
+        status = "unresolved"
+        confidence = "none"
+
+    return {
+        "role": role_label,
+        "filename": uploaded_file.name,
+        "month": resolved_month,
+        "year": resolved_year,
+        "source": " + ".join(unique_source_parts) if unique_source_parts else "manual confirmation",
+        "confidence": confidence,
+        "status": status,
+        "note": " ".join(part for part in note_parts if part),
+    }
+
+
+def _build_upload_detection_overview(energy_files, csi_file, mes_file):
+    file_detections = [
+        _resolve_uploaded_file_detection(uploaded_file, role)
+        for role, uploaded_file in [
+            *[("Energy", file) for file in energy_files],
+            ("CSI", csi_file),
+            ("MES", mes_file),
+        ]
+        if uploaded_file is not None
+    ]
+
+    detected_months = sorted({item["month"] for item in file_detections if item["month"]})
+    detected_years = sorted({item["year"] for item in file_detections if item["year"] is not None})
+    sources = sorted({item["source"] for item in file_detections if item["source"] and item["status"] != "unresolved"})
+
+    blocking_issues = []
+    for item in file_detections:
+        if item["status"] == "conflict":
+            blocking_issues.append(f"{item['role']} file `{item['filename']}` has conflicting month/year signals.")
+    if len(detected_months) > 1:
+        blocking_issues.append(
+            "Uploaded files point to multiple months: " + ", ".join(detected_months) + "."
+        )
+    if len(detected_years) > 1:
+        blocking_issues.append(
+            "Uploaded files point to multiple years: " + ", ".join(str(year) for year in detected_years) + "."
+        )
+
+    if file_detections:
+        confidence_rank = {"none": 0, "low": 1, "medium": 2, "high": 3}
+        overview_confidence = max(file_detections, key=lambda item: confidence_rank[item["confidence"]])[
+            "confidence"
+        ]
+    else:
+        overview_confidence = "none"
+
+    return {
+        "signature": _build_upload_signature(energy_files, csi_file, mes_file),
+        "file_detections": file_detections,
+        "detected_month": detected_months[0] if len(detected_months) == 1 else None,
+        "detected_year": detected_years[0] if len(detected_years) == 1 else None,
+        "blocking_issues": blocking_issues,
+        "source_summary": " + ".join(sources) if sources else "manual confirmation",
+        "confidence": overview_confidence,
+        "has_files": bool(file_detections),
+    }
+
+
+def _build_year_options(current_year, detected_year=None):
+    year_options = list(range(current_year - 5, current_year + 2))
+    if detected_year is not None and detected_year not in year_options:
+        year_options.append(detected_year)
+        year_options.sort()
+    return year_options
+
+
+def _sync_upload_target_state(detection_overview):
+    current_year = datetime.now().year
+    if "etl_selected_month" not in st.session_state:
+        st.session_state.etl_selected_month = "June"
+    if "etl_selected_year" not in st.session_state:
+        st.session_state.etl_selected_year = current_year
+    if "etl_manual_override" not in st.session_state:
+        st.session_state.etl_manual_override = False
+
+    if st.session_state.get("etl_upload_signature") == detection_overview["signature"]:
+        return
+
+    detected_month = detection_overview.get("detected_month")
+    detected_year = detection_overview.get("detected_year")
+
+    if detected_month:
+        st.session_state.etl_selected_month = detected_month
+    else:
+        st.session_state.etl_selected_month = st.session_state.get("etl_selected_month", "June")
+
+    if detected_year is not None:
+        st.session_state.etl_selected_year = detected_year
+    else:
+        st.session_state.etl_selected_year = st.session_state.get("etl_selected_year", current_year)
+
+    st.session_state.etl_manual_override = not (detected_month or detected_year is not None)
+    st.session_state.etl_upload_signature = detection_overview["signature"]
+
+
+def _safe_load_run_details(details_value):
+    if details_value is None:
+        return {}
+    try:
+        return json.loads(details_value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _query_month_three_way_delta(conn, current_month, previous_month):
+    gained_query = """
+        SELECT DISTINCT machine_id
+        FROM machine_monthly_presence
+        WHERE month_year = ?
+          AND system_type = 'Energy'
+          AND is_three_way_match = 1
+          AND machine_id NOT IN (
+              SELECT machine_id
+              FROM machine_monthly_presence
+              WHERE month_year = ?
+                AND system_type = 'Energy'
+                AND is_three_way_match = 1
+          )
+        ORDER BY machine_id
+    """
+    lost_query = """
+        SELECT DISTINCT machine_id
+        FROM machine_monthly_presence
+        WHERE month_year = ?
+          AND system_type = 'Energy'
+          AND is_three_way_match = 1
+          AND machine_id NOT IN (
+              SELECT machine_id
+              FROM machine_monthly_presence
+              WHERE month_year = ?
+                AND system_type = 'Energy'
+                AND is_three_way_match = 1
+          )
+        ORDER BY machine_id
+    """
+    gained_df = pd.read_sql_query(gained_query, conn, params=(current_month, previous_month))
+    lost_df = pd.read_sql_query(lost_query, conn, params=(previous_month, current_month))
+    return gained_df, lost_df
+
+
+def _build_latest_run_snapshot(etl_module):
+    conn = sqlite3.connect(etl_module.db_path)
+    try:
+        latest_run_df = pd.read_sql_query(
+            """
+            SELECT id, month_processed, run_date, energy_files_count, three_way_matches, match_rate, details
+            FROM etl_runs
+            ORDER BY run_date DESC
+            LIMIT 1
+            """,
+            conn,
+        )
+        if latest_run_df.empty:
+            return None
+
+        latest_run = latest_run_df.iloc[0].to_dict()
+        latest_run["details"] = _safe_load_run_details(latest_run.get("details"))
+
+        latest_month = latest_run["month_processed"]
+        latest_run["run_count_for_month"] = int(
+            pd.read_sql_query(
+                "SELECT COUNT(*) AS row_count FROM etl_runs WHERE month_processed = ?",
+                conn,
+                params=(latest_month,),
+            ).iloc[0]["row_count"]
+        )
+
+        month_history_df = pd.read_sql_query(
+            """
+            SELECT month_processed, MAX(run_date) AS latest_run_date, COUNT(*) AS run_count
+            FROM etl_runs
+            GROUP BY month_processed
+            ORDER BY latest_run_date DESC
+            """,
+            conn,
+        )
+        latest_run["previous_distinct_month"] = (
+            month_history_df.iloc[1]["month_processed"] if len(month_history_df) > 1 else None
+        )
+
+        if latest_run["previous_distinct_month"]:
+            gained_df, lost_df = _query_month_three_way_delta(
+                conn,
+                latest_month,
+                latest_run["previous_distinct_month"],
+            )
+        else:
+            gained_df = pd.DataFrame(columns=["machine_id"])
+            lost_df = pd.DataFrame(columns=["machine_id"])
+
+        cumulative_inventory_df = etl_module.get_machine_inventory_summary(active_only=False)
+        months_processed = month_history_df.sort_values("latest_run_date")["month_processed"].tolist()
+
+        historical_gap_df = pd.DataFrame(columns=["machine_id", "appeared_in_months"])
+        if latest_month:
+            historical_gap_df = pd.read_sql_query(
+                """
+                SELECT DISTINCT m.machine_id,
+                       GROUP_CONCAT(m.month_year, ', ') AS appeared_in_months
+                FROM machine_monthly_presence m
+                WHERE m.is_three_way_match = 1
+                  AND m.system_type = 'Energy'
+                  AND m.machine_id NOT IN (
+                      SELECT machine_id
+                      FROM machine_monthly_presence
+                      WHERE month_year = ?
+                        AND is_three_way_match = 1
+                        AND system_type = 'Energy'
+                  )
+                GROUP BY m.machine_id
+                ORDER BY m.machine_id
+                """,
+                conn,
+                params=(latest_month,),
+            )
+
+        all_time_match_count = int(
+            pd.read_sql_query("SELECT COUNT(*) AS row_count FROM three_way_matches", conn).iloc[0]["row_count"]
+        )
+
+        return {
+            "latest_run": latest_run,
+            "gained_df": gained_df,
+            "lost_df": lost_df,
+            "cumulative_inventory_df": cumulative_inventory_df,
+            "months_processed": months_processed,
+            "historical_gap_df": historical_gap_df,
+            "all_time_match_count": all_time_match_count,
+        }
+    finally:
+        conn.close()
+
+
+def render_etl_page(runtime_mode: str = "standard"):
     """Main function to render the ETL Pipeline page"""
     st.header("🔄 ETL Pipeline - Monthly Data Upload")
+    read_only_runtime = suppress_write_controls(runtime_mode)
+    if read_only_runtime:
+        info_prefix = (
+            "Demo read-only mode is active."
+            if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+            else "Pilot review mode is active."
+        )
+        st.info(
+            f"{info_prefix} Upload/process/backfill controls and historical-run mutations are hidden. "
+            "Latest run analytics and historical provenance remain available."
+        )
     
     # Initialize ETL module
-    etl_module = ETLPipelineModule()
+    etl_module = ETLPipelineModule(initialize_schema=not read_only_runtime)
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["📤 Upload New Data", "📊 Current Status", "📈 Historical Runs"])
+    tab1, tab2, tab3 = st.tabs(["📤 Upload New Data", "🧭 Latest Run Snapshot", "📈 Historical Runs"])
     
     with tab1:
-        render_upload_section(etl_module)
+        _render_extension_source_availability()
+        if read_only_runtime:
+            _render_demo_readonly_upload_gate()
+        else:
+            render_upload_section(etl_module)
     
     with tab2:
         render_current_status(etl_module)
         
     with tab3:
-        render_historical_runs(etl_module)
+        render_historical_runs(etl_module, read_only=read_only_runtime)
+
+
+def _render_demo_readonly_upload_gate() -> None:
+    st.warning(
+        "Demo read-only mode hides ETL upload, processing, backfill, and month-write controls. "
+        "Use `standard` mode for operational ETL work."
+    )
+    st.caption(
+        "The reviewer/demo shell still keeps `Latest Run Snapshot` and `Historical Runs` available as read-only evidence."
+    )
+
+
+def _render_extension_source_availability() -> None:
+    availability_df = _build_extension_source_availability_dataframe()
+    if availability_df.empty:
+        return
+
+    st.markdown("#### 🗂️ Jul 2025 to Mar 2026 Historical Source Availability")
+    readiness_counts = availability_df["Backfill Readiness"].value_counts()
+    summary_cols = st.columns(3)
+    with summary_cols[0]:
+        st.metric("Ready Months", int(readiness_counts.get("Ready", 0)))
+    with summary_cols[1]:
+        st.metric("Ready with Flags", int(readiness_counts.get("Ready with Flags", 0)))
+    with summary_cols[2]:
+        st.metric("Blocked Months", int(readiness_counts.get("Blocked", 0)))
+
+    st.caption(
+        "Task13 source onboarding distinguishes month-level readiness explicitly. "
+        "Partial months remain backfillable only with the documented flags and exclusions, while blocked months stay out of scope."
+    )
+    st.dataframe(availability_df, use_container_width=True, hide_index=True)
 
 
 def render_upload_section(etl_module):
@@ -531,7 +1626,8 @@ def render_upload_section(etl_module):
     if 'etl_results' in st.session_state and st.session_state.etl_results is not None:
         # Display the results instead of upload interface
         display_processing_results(st.session_state.etl_results['mapping_results'], 
-                                 st.session_state.etl_results['etl'])
+                                 st.session_state.etl_results['etl'],
+                                 st.session_state.etl_results.get('canonical_materialization'))
         generate_download_options(st.session_state.etl_results['mapping_results'], 
                                 st.session_state.etl_results['etl'], 
                                 st.session_state.etl_results['month_name'])
@@ -544,31 +1640,13 @@ def render_upload_section(etl_module):
             st.rerun()
         return
     
-    st.markdown("""
-    ### Upload Monthly Manufacturing Data
-    Please upload the three required files for the month you want to process:
-    """)
-    
-    # Month and Year selection
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        month_name = st.selectbox(
-            "Select Month",
-            ["January", "February", "March", "April", "May", "June", "July", 
-             "August", "September", "October", "November", "December"],
-            index=5  # Default to June
-        )
-    
-    with col2:
-        current_year = datetime.now().year
-        year = st.selectbox(
-            "Select Year",
-            list(range(current_year - 5, current_year + 2)),  # 5 years back, 1 year forward
-            index=5  # Default to current year
-        )
-    
-    # Combine month and year for processing
-    month_year = f"{month_name} {year}"
+    st.markdown(
+        """
+        ### Upload Monthly Manufacturing Data
+        Upload the required files first. The page will auto-detect the target month from filenames when it can,
+        keep manual override visible, and block processing if the uploaded files point to conflicting months/years.
+        """
+    )
     
     # File upload sections
     st.markdown("#### 1️⃣ Energy Consumption Files")
@@ -597,14 +1675,115 @@ def render_upload_section(etl_module):
         key="mes_uploader",
         help="Upload the monthly MES planning data"
     )
+
+    detection_overview = _build_upload_detection_overview(energy_files, csi_file, mes_file)
+    _sync_upload_target_state(detection_overview)
+
+    st.markdown("#### 🎯 Target Month Confirmation")
+    st.caption(
+        "One ETL run writes one month only. Multiple energy files are accepted only when they resolve to the same target month."
+    )
+
+    if detection_overview["has_files"]:
+        detection_cols = st.columns(4)
+        with detection_cols[0]:
+            st.metric("Detected Month", detection_overview["detected_month"] or "Needs review")
+        with detection_cols[1]:
+            detected_year_label = (
+                str(detection_overview["detected_year"])
+                if detection_overview["detected_year"] is not None
+                else "Needs review"
+            )
+            st.metric("Detected Year", detected_year_label)
+        with detection_cols[2]:
+            st.metric("Detection Source", detection_overview["source_summary"])
+        with detection_cols[3]:
+            st.metric("Confidence", detection_overview["confidence"].title())
+
+        with st.expander("Per-file detection details", expanded=False):
+            detection_rows = []
+            for item in detection_overview["file_detections"]:
+                month_year_label = " / ".join(
+                    part
+                    for part in [
+                        item["month"] or "month unresolved",
+                        str(item["year"]) if item["year"] is not None else "year unresolved",
+                    ]
+                )
+                detection_rows.append(
+                    {
+                        "File Role": item["role"],
+                        "Filename": item["filename"],
+                        "Detected Target": month_year_label,
+                        "Source": item["source"],
+                        "Confidence": item["confidence"].title(),
+                        "Notes": item["note"],
+                    }
+                )
+            st.dataframe(pd.DataFrame(detection_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info(
+            "Upload one or more files and the page will try to prefill the target month/year from the filenames before you process."
+        )
+
+    manual_override = st.checkbox(
+        "Use manual override for the target month/year",
+        key="etl_manual_override",
+        help="Keep this off to use the detected month/year when the uploaded files agree. Turn it on only if you need to correct the target period.",
+    )
+
+    current_year = datetime.now().year
+    year_options = _build_year_options(current_year, detection_overview["detected_year"])
+    month_disabled = bool(detection_overview["detected_month"]) and not manual_override
+    year_disabled = detection_overview["detected_year"] is not None and not manual_override
+
+    selection_col1, selection_col2 = st.columns(2)
+    with selection_col1:
+        month_name = st.selectbox(
+            "Final month to write",
+            MONTH_NAME_OPTIONS,
+            key="etl_selected_month",
+            disabled=month_disabled,
+        )
+    with selection_col2:
+        year = st.selectbox(
+            "Final year to write",
+            year_options,
+            key="etl_selected_year",
+            disabled=year_disabled,
+        )
+
+    month_year = f"{month_name} {year}"
+
+    if detection_overview["blocking_issues"]:
+        st.warning("Resolve the uploaded-file month/year conflicts before processing:")
+        for issue in detection_overview["blocking_issues"]:
+            st.write(f"- {issue}")
+    elif detection_overview["has_files"]:
+        st.success(f"Final confirmed month that will be written: {month_year}")
+        if manual_override:
+            st.caption("Manual override is active. The final write month comes from your selection above.")
+        elif detection_overview["detected_year"] is None:
+            st.caption(
+                "Month came from file detection, but the year still requires explicit confirmation because it was not reliably present in the uploaded filenames/workbook sample."
+            )
+        else:
+            st.caption("Processing will use the detected target month/year shown above.")
     
     # Validation and processing
     if energy_files and csi_file and mes_file:
-        st.success(f"✅ All files uploaded for {month_year}")
+        if detection_overview["blocking_issues"]:
+            st.error("⚠️ All files are uploaded, but processing is blocked until the month/year conflicts are resolved.")
+        else:
+            st.success(f"✅ All files uploaded for {month_year}")
         
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            if st.button("🚀 Process Data", type="primary"):
+            if st.button(
+                f"🚀 Process {month_year}",
+                type="primary",
+                disabled=bool(detection_overview["blocking_issues"]),
+            ):
                 process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_module)
     else:
         missing = []
@@ -624,8 +1803,8 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
     try:
         with st.spinner(f"Processing {month_year} data..."):
             # Save uploaded files to persistent data directory for unified view
-            data_dir = Path("data")
-            data_dir.mkdir(exist_ok=True)
+            data_dir = get_data_dir()
+            data_dir.mkdir(parents=True, exist_ok=True)
             
             # Clean month name for file naming
             month_prefix = month_year.replace(' ', '_')
@@ -633,19 +1812,19 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
             # Save energy files with month-specific names
             energy_paths = []
             for i, file in enumerate(energy_files):
-                # Use month-specific naming: e.g., "January_2025_energy_1.xlsx"
-                path = data_dir / f"{month_prefix}_energy_{i+1}.xlsx"
+                suffix = _uploaded_file_suffix(file)
+                path = data_dir / f"{month_prefix}_energy_{i+1}{suffix}"
                 with open(path, "wb") as f:
                     f.write(file.getbuffer())
                 energy_paths.append(str(path))
             
             # Save CSI file with month-specific name
-            csi_path = data_dir / f"{month_prefix}_csi.xlsx"
+            csi_path = data_dir / f"{month_prefix}_csi{_uploaded_file_suffix(csi_file)}"
             with open(csi_path, "wb") as f:
                 f.write(csi_file.getbuffer())
             
             # Save MES file with month-specific name
-            mes_path = data_dir / f"{month_prefix}_mes.xlsx"
+            mes_path = data_dir / f"{month_prefix}_mes{_uploaded_file_suffix(mes_file)}"
             with open(mes_path, "wb") as f:
                 f.write(mes_file.getbuffer())
             
@@ -655,33 +1834,13 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
             # Process files
             st.info("Extracting data from files...")
             etl.extract_all_sources(energy_paths, str(csi_path), str(mes_path))
+            _scope_etl_state_to_month(etl, month_year)
             
             st.info("Creating machine mappings...")
             mapping_results = etl.create_comprehensive_mapping()
             
             # Save results to database including actual data
             etl_module.save_etl_results(mapping_results, month_year, etl)
-            
-            # Auto-trigger Unified View processing
-            st.info("🔄 Automatically creating Unified View...")
-            try:
-                from unified_view_module import auto_process_after_etl
-                unified_result = auto_process_after_etl(month_year)
-                
-                if unified_result['status'] == 'success':
-                    st.success(f"✅ Unified View created: {unified_result['records_created']} hourly records")
-                else:
-                    st.warning(f"⚠️ Unified View creation issue: {unified_result.get('message', 'Unknown')}")
-            except Exception as e:
-                st.warning(f"⚠️ Could not auto-create Unified View: {str(e)}")
-                st.info("You can manually create it in the Unified View module")
-            
-            # Store results in session state
-            st.session_state.etl_results = {
-                'mapping_results': mapping_results,
-                'etl': etl,
-                'month_name': month_year
-            }
             
             # Clean up temp files
             for path in energy_paths + [csi_path, mes_path]:
@@ -699,12 +1858,14 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
             ]
             
             maintenance_file = None
+            repo_root = get_repo_root()
             for pattern in maintenance_patterns:
-                if os.path.exists(pattern):
-                    maintenance_file = pattern
+                repo_path = repo_root / pattern
+                if repo_path.exists():
+                    maintenance_file = str(repo_path)
                     break
                 # Also check in data directory
-                data_path = Path("data") / pattern
+                data_path = data_dir / pattern
                 if data_path.exists():
                     maintenance_file = str(data_path)
                     break
@@ -715,7 +1876,11 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
                     from core.maintenance_integration import integrate_maintenance_with_etl
                     
                     with st.spinner("Integrating maintenance data..."):
-                        maint_result = integrate_maintenance_with_etl(maintenance_file, month_year)
+                        maint_result = integrate_maintenance_with_etl(
+                            maintenance_file,
+                            month_year,
+                            db_path=etl_module.db_path,
+                        )
                         
                         if maint_result:
                             # Count matched records
@@ -724,7 +1889,7 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
                             total = len(maintenance_df)
                             
                             # Save to database
-                            conn = sqlite3.connect('manufacturing_data.db')
+                            conn = sqlite3.connect(etl_module.db_path)
                             maintenance_df.to_sql('maintenance_records', conn, if_exists='append', index=False)
                             
                             if maint_result['metrics'] is not None:
@@ -756,6 +1921,50 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
                     st.warning(f"Could not integrate maintenance data: {str(e)}")
             else:
                 st.info("No maintenance file found. You can upload it separately in the Maintenance module.")
+
+            canonical_result = None
+            st.info("🔄 Materializing canonical Silver + Gold...")
+            try:
+                from modules.unified_view_module import auto_process_after_etl
+                canonical_result = auto_process_after_etl(month_year, db_path=etl_module.db_path)
+
+                if canonical_result['status'] == 'success':
+                    silver_counts = canonical_result.get('silver_rows_materialized_by_table', {})
+                    gold_rows = canonical_result.get('gold_fact_machine_hour_rows_created', 0)
+                    st.success(
+                        "✅ Canonical materialization complete: "
+                        f"target month {canonical_result.get('target_month', month_year)} | "
+                        f"Silver yes | Gold yes | fact_machine_hour rows {gold_rows:,}"
+                    )
+                    st.caption(
+                        "Silver rows materialized: "
+                        + ", ".join(
+                            f"{table}={count:,}" for table, count in silver_counts.items()
+                        )
+                    )
+                else:
+                    st.warning(
+                        "⚠️ Canonical materialization issue: "
+                        f"{canonical_result.get('message', 'Unknown')}"
+                    )
+            except Exception as e:
+                canonical_result = {
+                    'status': 'error',
+                    'target_month': month_year,
+                    'silver_materialized': False,
+                    'gold_materialized': False,
+                    'message': str(e),
+                }
+                st.warning(f"⚠️ Could not materialize canonical Silver/Gold: {str(e)}")
+                st.info("The Unified View page will continue to warn until canonical Gold is materialized.")
+
+            # Store results in session state
+            st.session_state.etl_results = {
+                'mapping_results': mapping_results,
+                'etl': etl,
+                'month_name': month_year,
+                'canonical_materialization': canonical_result,
+            }
             
             # Trigger a rerun to display results
             st.success(f"✅ Successfully processed {month_year} data!")
@@ -766,10 +1975,37 @@ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_mod
         st.exception(e)
 
 
-def display_processing_results(mapping_results, etl):
+def display_processing_results(mapping_results, etl, canonical_materialization=None):
     """Display the processing results"""
     st.markdown("## 📊 Processing Results")
     st.markdown("---")
+
+    if canonical_materialization:
+        st.markdown("### 🏗️ Canonical Materialization")
+        if canonical_materialization.get('status') == 'success':
+            silver_counts = canonical_materialization.get('silver_rows_materialized_by_table', {})
+            gold_rows = canonical_materialization.get('gold_fact_machine_hour_rows_created', 0)
+            st.success(
+                f"Canonical Silver + Gold materialized for {canonical_materialization.get('target_month', 'selected month')}."
+            )
+            status_col1, status_col2, status_col3 = st.columns(3)
+            with status_col1:
+                st.metric("Canonical Silver", "Yes")
+            with status_col2:
+                st.metric("Canonical Gold", "Yes")
+            with status_col3:
+                st.metric("Gold Rows", f"{gold_rows:,}")
+            if silver_counts:
+                st.caption(
+                    "Silver rows materialized: "
+                    + ", ".join(f"{table}={count:,}" for table, count in silver_counts.items())
+                )
+        else:
+            st.warning(
+                "Canonical Silver/Gold materialization did not complete: "
+                f"{canonical_materialization.get('message', 'Unknown issue')}"
+            )
+        st.markdown("<br>", unsafe_allow_html=True)
     
     # Summary metrics with better spacing
     stats = mapping_results['mapping_stats']
@@ -1116,229 +2352,130 @@ def generate_download_options(mapping_results, etl, month_name):
 
 
 def render_current_status(etl_module):
-    """Render current machine inventory status"""
-    st.markdown("### 🏭 Machine Inventory Status")
-    
-    # Add view selector
-    view_option = st.radio(
-        "Select View",
-        ["Latest Month", "Cumulative (All Time)"],
-        horizontal=True,
-        help="Latest Month shows data from the most recent processing. Cumulative shows all machines ever seen."
+    """Render the latest ETL snapshot with action-oriented context."""
+    st.markdown("### 🧭 Latest Run Snapshot")
+    st.caption("Answering three questions: what was processed last, what changed, and what can the operator do next.")
+
+    snapshot = _build_latest_run_snapshot(etl_module)
+    if snapshot is None:
+        st.info("No data processed yet. Please upload files to begin.")
+        return
+
+    latest_run = snapshot["latest_run"]
+    details = latest_run["details"]
+    latest_month = latest_run["month_processed"]
+    previous_month = latest_run["previous_distinct_month"]
+    gained_df = snapshot["gained_df"]
+    lost_df = snapshot["lost_df"]
+
+    st.info(
+        f"Latest processed month: **{latest_month}** | "
+        f"Last run recorded: **{pd.to_datetime(latest_run['run_date']).strftime('%Y-%m-%d %H:%M')}** | "
+        f"Run records retained for this month: **{latest_run['run_count_for_month']}**"
     )
-    
-    if view_option == "Latest Month":
-        # Get the latest month processed
-        conn = sqlite3.connect(etl_module.db_path)
-        latest_month_query = """
-            SELECT month_processed, run_date, three_way_matches, 
-                   energy_files_count, match_rate
-            FROM etl_runs 
-            ORDER BY run_date DESC 
-            LIMIT 1
-        """
-        latest_run = pd.read_sql_query(latest_month_query, conn)
-        
-        if not latest_run.empty:
-            month = latest_run.iloc[0]['month_processed']
-            st.info(f"📅 Showing data for: **{month}**")
-            
-            # Get details from the latest run
-            details_str = pd.read_sql_query(
-                "SELECT details FROM etl_runs WHERE month_processed = ? ORDER BY run_date DESC LIMIT 1",
-                conn,
-                params=(month,)
-            )['details'].iloc[0]
-            
-            details = json.loads(details_str)
-            
-            # Display metrics from the latest month
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Energy Machines", details.get('energy_unique_machines', 0))
-            with col2:
-                st.metric("CSI Machines", details.get('csi_machines', 0))
-            with col3:
-                st.metric("MES Machines", details.get('mes_machines', 0))
-            
-            st.metric("Three-way Matches (This Month)", latest_run.iloc[0]['three_way_matches'])
-            
-            # Show match rate
-            st.metric("Match Rate", f"{latest_run.iloc[0]['match_rate']:.1f}%")
-        else:
-            st.info("No data processed yet. Please upload files to begin.")
-        
-        conn.close()
-        
-    else:  # Cumulative view
-        # Get inventory summary - all machines ever seen
-        inventory_df = etl_module.get_machine_inventory_summary(active_only=False)
-        
+
+    metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
+    with metric_col1:
+        st.metric("Three-way Matches", latest_run["three_way_matches"])
+    with metric_col2:
+        st.metric("Match Rate", f"{float(latest_run['match_rate']):.1f}%")
+    with metric_col3:
+        st.metric("Energy Machines", details.get("energy_unique_machines", 0))
+    with metric_col4:
+        st.metric("CSI Machines", details.get("csi_machines", 0))
+    with metric_col5:
+        st.metric("MES Machines", details.get("mes_machines", 0))
+
+    st.markdown("#### 🔄 What Changed Since The Previous Distinct Month")
+    if previous_month:
+        delta_col1, delta_col2 = st.columns(2)
+        with delta_col1:
+            st.metric(
+                f"Gained Three-Way Matches vs {previous_month}",
+                f"{len(gained_df):,}",
+            )
+            if not gained_df.empty:
+                with st.expander(f"View gained matches ({len(gained_df)})", expanded=False):
+                    st.write(gained_df["machine_id"].tolist())
+        with delta_col2:
+            st.metric(
+                f"Lost Three-Way Matches vs {previous_month}",
+                f"{len(lost_df):,}",
+            )
+            if not lost_df.empty:
+                with st.expander(f"View lost matches ({len(lost_df)})", expanded=False):
+                    st.write(lost_df["machine_id"].tolist())
+        if gained_df.empty and lost_df.empty:
+            st.caption(f"No three-way match movement was recorded between {previous_month} and {latest_month}.")
+    else:
+        st.caption("Month-over-month gained/lost counts will appear once at least two distinct processed months exist.")
+
+    st.markdown("#### ✅ What You Can Do Next")
+    next_steps = [
+        f"Upload a new month when you want to add the next canonical month after {latest_month}.",
+        f"Rerun {latest_month} only when corrected source files are ready; the active month snapshot will be replaced for that month.",
+        "Use the Historical Runs tab for provenance, export, and run-to-run presentation comparison.",
+    ]
+    for step in next_steps:
+        st.write(f"- {step}")
+
+    with st.expander("Historical inventory context", expanded=False):
+        inventory_df = snapshot["cumulative_inventory_df"]
         if not inventory_df.empty:
-            st.info("📊 Showing cumulative data from all processed months")
-            
-            # Display metrics
-            col1, col2, col3 = st.columns(3)
-            
-            for idx, row in inventory_df.iterrows():
-                if row['system_type'] == 'Energy':
-                    with col1:
-                        st.metric("Energy Machines (All Time)", row['machine_count'])
-                elif row['system_type'] == 'CSI':
-                    with col2:
-                        st.metric("CSI Machines (All Time)", row['machine_count'])
-                elif row['system_type'] == 'MES':
-                    with col3:
-                        st.metric("MES Machines (All Time)", row['machine_count'])
-            
-            # Get three-way match count
-            conn = sqlite3.connect(etl_module.db_path)
-            match_count = pd.read_sql_query(
-                "SELECT COUNT(*) as count FROM three_way_matches", 
-                conn
-            )['count'][0]
-            
-            # Get list of all months processed
-            months_processed = pd.read_sql_query(
-                "SELECT DISTINCT month_processed FROM etl_runs ORDER BY month_processed",
-                conn
-            )['month_processed'].tolist()
-            
-            st.metric("Unique Three-way Matched Machines (All Time)", match_count)
-            st.caption(f"Data accumulated from: {', '.join(months_processed)}")
-            
-            # Add historical machines dropdown
-            st.markdown("### 🔍 Historical Machine Analysis")
-            
-            # Get the latest month
-            latest_month_query = """
-                SELECT month_processed FROM etl_runs 
-                ORDER BY run_date DESC LIMIT 1
-            """
-            latest_month_result = pd.read_sql_query(latest_month_query, conn)
-            
-            if not latest_month_result.empty:
-                latest_month = latest_month_result.iloc[0]['month_processed']
-                
-                # Query for machines that were historically matched but not in current month
-                historical_not_current_query = f"""
-                    SELECT DISTINCT m.machine_id, 
-                           GROUP_CONCAT(m.month_year, ', ') as appeared_in_months
-                    FROM machine_monthly_presence m
-                    WHERE m.is_three_way_match = 1
-                    AND m.system_type = 'Energy'
-                    AND m.machine_id NOT IN (
-                        SELECT machine_id 
-                        FROM machine_monthly_presence 
-                        WHERE month_year = '{latest_month}'
-                        AND is_three_way_match = 1
-                        AND system_type = 'Energy'
-                    )
-                    GROUP BY m.machine_id
-                """
-                
-                historical_machines = pd.read_sql_query(historical_not_current_query, conn)
-                
-                if not historical_machines.empty:
-                    with st.expander(f"📋 View machines not in {latest_month} ({len(historical_machines)} machines)"):
-                        st.markdown(f"These machines were historically matched but are not present in {latest_month}:")
-                        
-                        # Display as a nice table
-                        display_df = historical_machines.rename(columns={
-                            'machine_id': 'Machine ID',
-                            'appeared_in_months': 'Appeared In'
-                        })
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
-                        
-                        # Download option
-                        csv = display_df.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Download Historical Machines CSV",
-                            data=csv,
-                            file_name=f"historical_machines_not_in_{latest_month.replace(' ', '_')}.csv",
-                            mime="text/csv"
-                        )
-                else:
-                    st.success(f"✅ All historically matched machines are present in {latest_month}")
-            
-            conn.close()
-            
-        else:
-            st.info("No data processed yet. Please upload files to begin.")
-    
-    # Add machine changes section only for Latest Month view
-    if view_option == "Latest Month":
-        st.markdown("### 🔄 Three-Way Match Changes Between Months")
-        st.caption("Tracking machines that gained or lost three-way match status")
-        
-        conn = sqlite3.connect(etl_module.db_path)
-        
-        # Get all months in order (now includes year)
-        months_df = pd.read_sql_query(
-            "SELECT DISTINCT month_processed, run_date FROM etl_runs ORDER BY run_date",
-            conn
-        )
-        
-        if len(months_df) >= 2:
-            # Compare last two months
-            last_two_months = months_df['month_processed'].tail(2).tolist()
-            prev_month, curr_month = last_two_months[0], last_two_months[1]
-            
-            # Find machines that appeared/disappeared using monthly presence table
-            query_new = f"""
-                SELECT DISTINCT machine_id 
-                FROM machine_monthly_presence 
-                WHERE month_year = '{curr_month}'
-                AND system_type = 'Energy'
-                AND is_three_way_match = 1
-                AND machine_id NOT IN (
-                    SELECT machine_id FROM machine_monthly_presence 
-                    WHERE month_year = '{prev_month}'
-                    AND system_type = 'Energy'
-                    AND is_three_way_match = 1
+            inventory_col1, inventory_col2, inventory_col3, inventory_col4 = st.columns(4)
+            with inventory_col1:
+                energy_total = inventory_df.loc[
+                    inventory_df["system_type"] == "Energy", "machine_count"
+                ].sum()
+                st.metric("Energy Machines (All Time)", int(energy_total))
+            with inventory_col2:
+                csi_total = inventory_df.loc[
+                    inventory_df["system_type"] == "CSI", "machine_count"
+                ].sum()
+                st.metric("CSI Machines (All Time)", int(csi_total))
+            with inventory_col3:
+                mes_total = inventory_df.loc[
+                    inventory_df["system_type"] == "MES", "machine_count"
+                ].sum()
+                st.metric("MES Machines (All Time)", int(mes_total))
+            with inventory_col4:
+                st.metric(
+                    "Unique Three-Way Matches (All Time)",
+                    f"{snapshot['all_time_match_count']:,}",
                 )
-            """
-            
-            query_lost = f"""
-                SELECT DISTINCT machine_id 
-                FROM machine_monthly_presence 
-                WHERE month_year = '{prev_month}'
-                AND system_type = 'Energy'
-                AND is_three_way_match = 1
-                AND machine_id NOT IN (
-                    SELECT machine_id FROM machine_monthly_presence 
-                    WHERE month_year = '{curr_month}'
-                    AND system_type = 'Energy'
-                    AND is_three_way_match = 1
-                )
-            """
-            
-            new_machines = pd.read_sql_query(query_new, conn)
-            lost_machines = pd.read_sql_query(query_lost, conn)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.success(f"✅ New three-way matches in {curr_month}: {len(new_machines)} machine{'s' if len(new_machines) != 1 else ''}")
-                if len(new_machines) > 0:
-                    with st.expander("View new three-way matches"):
-                        st.write(new_machines['machine_id'].tolist())
-            
-            with col2:
-                st.warning(f"⚠️ Lost three-way matches from {prev_month}: {len(lost_machines)} machine{'s' if len(lost_machines) != 1 else ''}")
-                if len(lost_machines) > 0:
-                    with st.expander("View lost three-way matches"):
-                        st.write(lost_machines['machine_id'].tolist())
+            st.caption(
+                "Processed months in historical order: "
+                + (", ".join(snapshot["months_processed"]) if snapshot["months_processed"] else "none")
+            )
+
+        historical_gap_df = snapshot["historical_gap_df"]
+        if not historical_gap_df.empty:
+            st.markdown(f"Machines historically matched but not present in the latest month `{latest_month}`:")
+            display_df = historical_gap_df.rename(
+                columns={"machine_id": "Machine ID", "appeared_in_months": "Appeared In"}
+            )
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                label="📥 Download Historical Machines CSV",
+                data=display_df.to_csv(index=False),
+                file_name=f"historical_machines_not_in_{latest_month.replace(' ', '_')}.csv",
+                mime="text/csv",
+            )
         else:
-            st.info("Process at least 2 months to see changes between months")
-        
-        conn.close()
+            st.success(f"✅ All historically matched machines are present in {latest_month}")
 
 
-def render_historical_runs(etl_module):
+def render_historical_runs(etl_module, *, read_only: bool = False):
     """Render historical ETL runs with delete and reorder functionality"""
     st.markdown("### 📈 Historical Processing Runs")
+    st.caption(
+        "Rerunning the same month replaces the active month snapshot in ETL storage and canonical materialization, "
+        "while the run records below stay available for provenance and presentation comparison."
+    )
+    if read_only:
+        st.info(
+            "Demo read-only mode hides delete, reorder, and bulk-selection controls for ETL run history."
+        )
     
     # Initialize session state for bulk selection
     if 'selected_runs' not in st.session_state:
@@ -1350,7 +2487,7 @@ def render_historical_runs(etl_module):
     col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
     
     with col1:
-        if st.button("🔄 Bulk Select", type="secondary" if not st.session_state.bulk_select_mode else "primary"):
+        if (not read_only) and st.button("🔄 Bulk Select", type="secondary" if not st.session_state.bulk_select_mode else "primary"):
             st.session_state.bulk_select_mode = not st.session_state.bulk_select_mode
             st.session_state.selected_runs = []
     
@@ -1372,18 +2509,18 @@ def render_historical_runs(etl_module):
         order_by = sort_mapping[sort_option]
     
     with col3:
-        if st.button("↺ Reset Order"):
+        if (not read_only) and st.button("↺ Reset Order"):
             etl_module.reset_display_order()
             st.success("Order reset to chronological!")
             st.rerun()
     
     with col4:
-        if st.session_state.bulk_select_mode and len(st.session_state.selected_runs) > 0:
+        if (not read_only) and st.session_state.bulk_select_mode and len(st.session_state.selected_runs) > 0:
             if st.button(f"🗑️ Delete Selected ({len(st.session_state.selected_runs)})", type="primary"):
                 st.session_state.confirm_bulk_delete = True
     
     # Bulk delete confirmation dialog
-    if st.session_state.get('confirm_bulk_delete', False):
+    if (not read_only) and st.session_state.get('confirm_bulk_delete', False):
         st.warning(f"⚠️ Are you sure you want to delete {len(st.session_state.selected_runs)} selected records?")
         col_yes, col_no = st.columns(2)
         with col_yes:
@@ -1413,7 +2550,7 @@ def render_historical_runs(etl_module):
             
             # Checkbox for bulk selection
             with col_check:
-                if st.session_state.bulk_select_mode:
+                if st.session_state.bulk_select_mode and not read_only:
                     if st.checkbox("", key=f"select_{row['id']}", value=row['id'] in st.session_state.selected_runs):
                         if row['id'] not in st.session_state.selected_runs:
                             st.session_state.selected_runs.append(row['id'])
@@ -1437,7 +2574,7 @@ def render_historical_runs(etl_module):
             
             # Action buttons
             with col_actions:
-                if not st.session_state.bulk_select_mode:
+                if not st.session_state.bulk_select_mode and not read_only:
                     action_cols = st.columns(3)
                     
                     # Up button
@@ -1460,7 +2597,7 @@ def render_historical_runs(etl_module):
                             st.rerun()
             
             # Confirmation dialog for individual deletion
-            if st.session_state.get(f"confirm_delete_{row['id']}", False):
+            if (not read_only) and st.session_state.get(f"confirm_delete_{row['id']}", False):
                 with st.container():
                     st.warning(f"Are you sure you want to delete the {row['month_processed']} run from {row['run_date_formatted']}?")
                     col_yes, col_no = st.columns(2)

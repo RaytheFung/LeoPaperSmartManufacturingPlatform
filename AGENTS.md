@@ -27,3 +27,21 @@ Common pitfalls and fixes
 Share link
 - Use `http://localhost:8502`.
 
+Persistent final terminal reply format for future Codex runs in this repo
+- Use these exact headings in this exact order.
+- Do not collapse them into prose.
+- If a section is empty, write "none" rather than omitting it.
+- If a task-specific prompt explicitly requires a longer exact heading list, follow that prompt for that run.
+
+1. verdict
+2. official repo state after this run
+3. live DB state after this run
+4. active artifact state after this run
+5. changed file list
+6. exact reason for each change
+7. exact SQL/data-scope diagnostics run
+8. validation / smoke summary
+9. remaining limitations
+10. Status delta OR Proposed status delta (not applied)
+11. Ledger edit trace
+12. next intended step

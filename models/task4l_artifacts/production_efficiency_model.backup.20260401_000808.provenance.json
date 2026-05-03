@@ -1,0 +1,89 @@
+{
+  "active_db_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/manufacturing_data.db",
+  "all_model_metrics": {
+    "linear_regression": {
+      "mae": 0.03265713023709162,
+      "r2_score": 0.005223514168975596,
+      "rmse": 0.08719539625642139
+    },
+    "random_forest": {
+      "mae": 0.012474195763898854,
+      "r2_score": 0.0923859433637888,
+      "rmse": 0.08328780311430548
+    },
+    "xgboost": {
+      "mae": 0.011774886343415532,
+      "r2_score": 0.2091456031294202,
+      "rmse": 0.07774618132391221
+    }
+  },
+  "artifact_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_efficiency_model.pkl",
+  "artifact_role": "model",
+  "artifact_state": "active",
+  "artifact_version_id": "20260330_213926",
+  "backup_model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4g_artifacts/production_efficiency_model.backup.20260330_213926.pkl",
+  "backup_preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4g_artifacts/production_preprocessor.backup.20260330_213926.pkl",
+  "candidate_model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4g_artifacts/production_efficiency_model.candidate.20260330_213926.pkl",
+  "candidate_preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4g_artifacts/production_preprocessor.candidate.20260330_213926.pkl",
+  "distinct_machines_after_filtering": 24,
+  "feature_columns": [
+    "hour_of_day",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "is_night_shift",
+    "machine_type_encoded",
+    "machine_number",
+    "team_size",
+    "task_complexity",
+    "hours_since_last_maintenance",
+    "maintenance_urgency",
+    "needs_maintenance",
+    "maintenance_intensity_30d",
+    "cumulative_maintenance_count",
+    "production_qty",
+    "last_maintenance_type_encoded",
+    "team_leader_encoded",
+    "material_code_encoded"
+  ],
+  "feature_contract_version": "canonical_fact_machine_hour_ml_v1",
+  "model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_efficiency_model.pkl",
+  "month_coverage": [
+    "January 2025"
+  ],
+  "predictor_smoke": {
+    "candidate_rows_considered": 1,
+    "confidence": 0.9028894697049799,
+    "failure_reason": null,
+    "first_failure": null,
+    "months_considered": [
+      "January 2025"
+    ],
+    "passed": true,
+    "predicted_efficiency": 0.008638044819235802,
+    "prediction_source": "model",
+    "predictor_status": {
+      "canonical_inference_enabled": true,
+      "model_artifact_present": true,
+      "predictor_bundle_present": true
+    },
+    "sample_hour_ts": "2025-01-12T16:00:00",
+    "sample_machine_id": "024-135",
+    "sample_month": "January 2025"
+  },
+  "preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_preprocessor.pkl",
+  "promoted_at": "2026-03-30T21:41:51.647776",
+  "promotion_success": true,
+  "rows_after_filtering": 3945,
+  "rows_after_hard_block": 3945,
+  "rows_loaded": 64725,
+  "selected_model": "xgboost",
+  "selected_model_metrics": {
+    "mae": 0.011774886343415532,
+    "r2_score": 0.2091456031294202,
+    "rmse": 0.07774618132391221
+  },
+  "task_tag": "Task 4G",
+  "trained_at": "2026-03-30T21:40:37.655223",
+  "training_source": "fact_machine_hour"
+}

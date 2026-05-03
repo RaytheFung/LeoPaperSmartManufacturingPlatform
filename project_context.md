@@ -1,10 +1,16 @@
 # Project Context – Smart Manufacturing ETL + ML Platform
 
-_Last updated: 2025-10-12 (Plan B focus for presentation)_
+_Last updated: 2026-03-13 (post-presentation cleanup and Stage 3 follow-through)_
+
+## Runtime Authority Note
+
+- This file is retained as broad historical architecture context.
+- Do not treat it as the live routed-runtime ledger.
+- For current defended runtime ownership, trust `CURRENT_REBUILD_STATUS.md` and `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` first.
 
 ## 0. Execution Plan (Near‑Term)
-- Current priority: Plan B — Presentation‑Ready Polish and stability for the Optimization module and related insights (Team × Task, Team‑composition, maintenance hotspots, exports, and UI consistency).
-- Next after presentation: Plan A — ML Quality & Reliability upgrades (feature engineering, time‑aware validation, model metadata/registry, drift checks, explainability enhancements).
+- Current priority: complete Stage 3 follow-through after the March 6, 2026 presentation, with emphasis on maintenance-feature backfill, data verification, and cleanup of stale repo artifacts.
+- Next after Stage 3: ML Quality & Reliability upgrades (feature engineering, time-aware validation, model metadata/registry, drift checks, explainability enhancements).
 
 ## 1. Architecture Overview
 
@@ -46,6 +52,7 @@ _Last updated: 2025-10-12 (Plan B focus for presentation)_
 
 ## 4. Unresolved Bugs / TODOs
 - **ETL Subcomponents Tests** – add unit tests for `core/etl/…` (pattern normalization, partial matches) and EUVG critical paths.
+- **Maintenance Feature Backfill** – live DB check on March 13, 2026 showed `unified_view.maintenance_in_hour` and `unified_view.hours_since_last_maintenance` still unpopulated even though the schema and downstream modules expect them; regenerate/backfill before treating maintenance-aware insights as complete.
 - **Action Workflow** – `ml_action_log` captures actions; no CMMS automation or notifications yet (deferred).
 - **Anomaly Detection** – simple outlier checks only; full alerting deferred.
 - **API Integration** – Streamlit only; external API endpoints deferred.
@@ -76,7 +83,7 @@ streamlit run app.py
 ```
 
 ## 6. Useful Paths
-- Raw sample data: `2025 DataSet(JAN to JUN)/…`
+- Raw sample data: `source_data/2025_jan_jun_initial/…`
 - Latest ETL outputs: `etl_outputs/`
 - Monthly summaries: `etl_outputs/summaries/processing_summary_*.csv`
 - ML models + preprocessors: `models/`

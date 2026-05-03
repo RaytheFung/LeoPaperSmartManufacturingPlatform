@@ -156,6 +156,47 @@ class MachineMapperIntegrationTests(unittest.TestCase):
         self.assertIn("CSI-ONLY", result.partial_matches["csi_only"])
         self.assertIn("MES-ONLY", result.partial_matches["mes_only"])
 
+    def test_create_mapping_prefers_loaded_canonical_machine_ids(self):
+        energy_df = pd.DataFrame(
+            {
+                "machine": ["UV上光機1035-10005 主機", "UV上光機1035-10005 UV"],
+                "datetime": [
+                    pd.Timestamp("2025-01-01 00:00:00"),
+                    pd.Timestamp("2025-01-01 01:00:00"),
+                ],
+                "electricity_kwh": [20.0, 10.0],
+                "electricity_cost": [200.0, 100.0],
+                "canonical_machine_id": ["035-017", "035-017"],
+            }
+        )
+        csi_df = pd.DataFrame(
+            {
+                "機台編號": ["D-035-017"],
+                "正品數量": [80],
+                "廢品數量": [5],
+                "canonical_machine_id": ["035-017"],
+            }
+        )
+        mes_df = pd.DataFrame(
+            {
+                "資源": ["1035-00017"],
+                "計劃生產數量": [100],
+                "實際完成數量": [90],
+                "canonical_machine_id": ["035-017"],
+            }
+        )
+
+        mapper = MachineMapper(energy_df, csi_df, mes_df)
+        aggregated = mapper.aggregate_energy()
+        self.assertIn("035-017", aggregated.index)
+        self.assertAlmostEqual(aggregated.loc["035-017", "total_kwh"], 30.0)
+
+        result = mapper.create_mapping()
+        self.assertEqual(result.mapping_stats["three_way_matches"], 1)
+        self.assertEqual(result.three_way_matches[0]["machine_id"], "035-017")
+        self.assertEqual(result.energy_to_csi["035-017"], "D-035-017")
+        self.assertEqual(result.energy_to_mes["035-017"], "1035-00017")
+
 
 if __name__ == "__main__":
     unittest.main()

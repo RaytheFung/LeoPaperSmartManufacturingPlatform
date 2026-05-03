@@ -1,715 +1,820 @@
 """
-Maintenance Module - Predictive Maintenance Analytics UI
-Integrates maintenance records with production data for risk predictions
+Maintenance evidence page backed by existing maintenance tables.
 """
 
-import streamlit as st
-import pandas as pd
-import sqlite3
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import os
+from __future__ import annotations
+
+from datetime import datetime
 from pathlib import Path
+import sqlite3
 
-# Import the maintenance integration module
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from core.maintenance_integration import MaintenanceDataIntegration, integrate_maintenance_with_etl
+import pandas as pd
+import plotly.express as px
+import streamlit as st
 
-def render_maintenance_page():
-    """Main function to render the Predictive Maintenance page"""
-    st.header("🔧 Predictive Maintenance Analytics")
-    
-    # Initialize
-    maint = MaintenanceDataIntegration()
-    conn = sqlite3.connect('manufacturing_data.db')
-    
-    # Load predictions if exist
+from core.canonical_energy_reader import CanonicalEnergyReader
+from core.maintenance_evidence import (
+    RECENT_HISTORY_LIMIT,
+    MaintenanceEvidenceReader,
+    format_maintenance_timestamp,
+)
+from core.maintenance_integration import integrate_maintenance_with_etl
+from core.runtime_capabilities import suppress_write_controls
+from core.runtime_mode import normalize_runtime_mode
+from core.runtime_paths import get_database_path
+from core.ui_utils import (
+    build_stat_card,
+    build_surface_card,
+    load_custom_css,
+    render_surface_card,
+    section_shell,
+)
+
+
+def render_maintenance_page(db_path=None, runtime_mode: str = "standard"):
+    """Render the maintenance evidence page."""
     try:
-        # Check if maintenance tables exist
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='maintenance_ml_features'
-        """)
-        table_exists = cursor.fetchone() is not None
-        
-        if table_exists:
-            # Load predictions
-            predictions = pd.read_sql_query("""
-                SELECT m.*, ms.total_maintenance_events, ms.mtbf_hours
-                FROM maintenance_ml_features m
-                LEFT JOIN maintenance_summary ms ON m.machine_id = ms.machine_id
-                ORDER BY m.failure_risk_score DESC
-            """, conn)
-            
-            if not predictions.empty:
-                # Risk distribution metrics
-                st.markdown("### 📊 Risk Distribution Overview")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                high_risk = len(predictions[predictions['failure_risk_score'] > 60])
-                med_risk = len(predictions[(predictions['failure_risk_score'] > 30) & 
-                                          (predictions['failure_risk_score'] <= 60)])
-                low_risk = len(predictions[predictions['failure_risk_score'] <= 30])
-                total_machines = len(predictions)
-                
-                col1.metric("🔴 High Risk", high_risk, f"{high_risk/total_machines*100:.1f}%")
-                col2.metric("🟡 Medium Risk", med_risk, f"{med_risk/total_machines*100:.1f}%")
-                col3.metric("🟢 Low Risk", low_risk, f"{low_risk/total_machines*100:.1f}%")
-                col4.metric("📊 Total Monitored", total_machines)
-                
-                # High-risk machines detail
-                st.markdown("### ⚠️ Machines Requiring Immediate Attention")
-                high_risk_df = predictions[predictions['failure_risk_score'] > 60].head(10)
-                
-                if not high_risk_df.empty:
-                    for idx, machine in high_risk_df.iterrows():
-                        risk_color = "🔴" if machine['failure_risk_score'] > 80 else "🟠"
-                        with st.expander(f"{risk_color} Machine {machine['machine_id']} - Risk Score: {machine['failure_risk_score']:.0f}%"):
-                            col1, col2, col3 = st.columns(3)
-                            
-                            col1.metric("Days Since Maintenance", 
-                                       f"{machine.get('days_since_last_maintenance', 'N/A')}")
-                            col2.metric("Production Since Maintenance", 
-                                       f"{machine.get('units_produced_since_maintenance', 0):.0f} units")
-                            col3.metric("Energy Since Maintenance", 
-                                       f"{machine.get('energy_consumed_since_maintenance', 0):.0f} kWh")
-                            
-                            # Recommendation
-                            st.info(f"**Recommended Action**: {machine.get('recommended_action', 'Schedule inspection')}")
-                            
-                            # MTBF if available
-                            if pd.notna(machine.get('mtbf_hours')):
-                                st.caption(f"Mean Time Between Failures: {machine['mtbf_hours']:.0f} hours")
-                
-                # Maintenance pattern analysis
-                st.markdown("### 📈 Maintenance Pattern Analysis")
-                
-                # Get work order distribution
-                work_orders = pd.read_sql_query("""
-                    SELECT work_order_type, COUNT(*) as count
-                    FROM maintenance_records
-                    GROUP BY work_order_type
-                """, conn)
-                
-                if not work_orders.empty:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # Pie chart of maintenance types
-                        fig = px.pie(work_orders, values='count', names='work_order_type',
-                                   title='Maintenance Type Distribution',
-                                   color_discrete_map={
-                                       'PM': '#2ecc71',  # Green - Preventive
-                                       'AM': '#e74c3c',  # Red - After failure
-                                       'CM': '#f39c12',  # Orange - Corrective
-                                       'EM': '#c0392b'   # Dark Red - Emergency
-                                   })
-                        fig.update_traces(textposition='inside', textinfo='percent+label')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with col2:
-                        # Calculate optimization metrics
-                        total = work_orders['count'].sum()
-                        reactive = work_orders[work_orders['work_order_type'].isin(['AM', 'CM', 'EM'])]['count'].sum()
-                        preventive = work_orders[work_orders['work_order_type'] == 'PM']['count'].sum() if 'PM' in work_orders['work_order_type'].values else 0
-                        reactive_pct = (reactive / total * 100) if total > 0 else 0
-                        
-                        st.markdown("#### 💡 Optimization Opportunity")
-                        st.metric("Current Reactive Rate", f"{reactive_pct:.1f}%", 
-                                 f"-{reactive_pct - 40:.1f}% vs target" if reactive_pct > 40 else "✅ At target")
-                        
-                        # Savings calculation
-                        if reactive_pct > 40:
-                            potential_reduction = reactive_pct - 40
-                            monthly_savings = potential_reduction * 1000  # $1000 per percentage point
-                            annual_savings = monthly_savings * 12
-                            
-                            st.success(f"""
-                            **Potential Savings:**
-                            - Monthly: ${monthly_savings:,.0f}
-                            - Annual: ${annual_savings:,.0f}
-                            - Strategy: Increase PM frequency for high-risk machines
-                            """)
-                
-                # Machine reliability trends
-                st.markdown("### 🔄 Machine Reliability Trends")
-                
-                # Get monthly maintenance trends
-                monthly_trends = pd.read_sql_query("""
-                    SELECT 
-                        strftime('%Y-%m', transaction_date) as month,
-                        work_order_type,
-                        COUNT(*) as count
-                    FROM maintenance_records
-                    WHERE transaction_date IS NOT NULL
-                    GROUP BY month, work_order_type
-                    ORDER BY month
-                """, conn)
-                
-                if not monthly_trends.empty:
-                    # Pivot for stacked bar chart
-                    trends_pivot = monthly_trends.pivot(index='month', columns='work_order_type', values='count').fillna(0)
-                    
-                    fig = go.Figure()
-                    colors = {'PM': '#2ecc71', 'AM': '#e74c3c', 'CM': '#f39c12', 'EM': '#c0392b'}
-                    
-                    for maint_type in trends_pivot.columns:
-                        fig.add_trace(go.Bar(
-                            name=maint_type,
-                            x=trends_pivot.index,
-                            y=trends_pivot[maint_type],
-                            marker_color=colors.get(maint_type, '#95a5a6')
-                        ))
-                    
-                    fig.update_layout(
-                        title='Maintenance Events Over Time',
-                        xaxis_title='Month',
-                        yaxis_title='Number of Events',
-                        barmode='stack',
-                        showlegend=True
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # Top maintenance consumers
-                st.markdown("### 🏭 Top Maintenance Consumers")
-                
-                top_machines = pd.read_sql_query("""
-                    SELECT 
-                        machine_id,
-                        COUNT(*) as total_events,
-                        SUM(CASE WHEN work_order_type = 'PM' THEN 1 ELSE 0 END) as preventive,
-                        SUM(CASE WHEN work_order_type IN ('AM', 'CM', 'EM') THEN 1 ELSE 0 END) as reactive
-                    FROM maintenance_records
-                    WHERE is_three_way_match = 1
-                    GROUP BY machine_id
-                    ORDER BY total_events DESC
-                    LIMIT 10
-                """, conn)
-                
-                if not top_machines.empty:
-                    # Add ratio calculation
-                    top_machines['PM_ratio'] = (top_machines['preventive'] / top_machines['total_events'] * 100).round(1)
+        load_custom_css()
+    except Exception:
+        pass
 
-                    # Display as table with color coding
-                    st.dataframe(
-                        top_machines.style.background_gradient(subset=['total_events'], cmap='Reds'),
-                        use_container_width=True
-                    )
+    db_path = str(db_path or get_database_path())
+    evidence_reader = MaintenanceEvidenceReader(db_path)
+    canonical_energy_reader = CanonicalEnergyReader(db_path)
+    snapshot = evidence_reader.build_coverage_snapshot()
+    read_only_runtime = suppress_write_controls(runtime_mode)
 
-                    # Alert for machines with low PM ratio
-                    low_pm = top_machines[top_machines['PM_ratio'] < 20]
-                    if not low_pm.empty:
-                        st.warning(f"⚠️ {len(low_pm)} machines have <20% preventive maintenance ratio - consider increasing PM frequency")
+    st.title("🔧 Maintenance Evidence & Coverage")
+    st.markdown(
+        "Read-only maintenance evidence from the existing maintenance tables. "
+        "This page shows storage coverage, machine-level history, and supporting operational visuals "
+        "without claiming a predictive-maintenance model, solver, or scheduling engine."
+    )
+    st.caption(
+        "Primary evidence comes from `maintenance_records` and related maintenance tables. "
+        "Compact maintenance context is reused on `🤖 Efficiency Prediction & Governance` and "
+        "`🎯 Operational Decision Support` without changing their ranking logic."
+    )
+    if read_only_runtime:
+        st.info(
+            "Demo read-only mode is active. Evidence and browse surfaces stay available, while upload/integration controls are hidden."
+            if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+            else "Pilot review mode is active. Evidence and browse surfaces stay available, while upload/integration controls are hidden."
+        )
 
-                # Efficiency degradation curve based on unified view data
-                st.markdown("### ⚙️ Efficiency vs Maintenance Age")
+    _render_status_banner(snapshot, runtime_mode=runtime_mode)
+    _render_coverage_snapshot(snapshot)
+    _render_machine_evidence_lookup(evidence_reader)
+    _render_supporting_visuals(evidence_reader)
 
-                try:
-                    efficiency_data = pd.read_sql_query("""
-                        SELECT 
-                            hours_since_last_maintenance,
-                            kwh_per_unit
-                        FROM unified_view
-                        WHERE kwh_per_unit > 0 AND kwh_per_unit < 20
-                          AND hours_since_last_maintenance IS NOT NULL
-                          AND is_near_zero_output = 0
-                    """, conn)
+    with st.expander(
+        "Supporting Evidence: Observed Energy Intensity vs Maintenance Age",
+        expanded=False,
+    ):
+        _render_energy_context(canonical_energy_reader)
 
-                    if not efficiency_data.empty:
-                        efficiency_data['bucket'] = pd.cut(
-                            efficiency_data['hours_since_last_maintenance'],
-                            bins=[0, 200, 500, 800, 1200, 2000, 4000],
-                            labels=['0-200h', '200-500h', '500-800h', '800-1200h', '1200-2000h', '2000h+']
-                        )
+    if snapshot["legacy_risk_rows"] > 0:
+        with st.expander(
+            "Reference & Audit: Legacy/Admin Maintenance Risk View",
+            expanded=False,
+        ):
+            _render_legacy_risk_reference(db_path)
 
-                        bucket_stats = efficiency_data.groupby('bucket')['kwh_per_unit'].agg(['mean', 'count']).reset_index()
-                        bucket_stats = bucket_stats[bucket_stats['count'] > 20]
-
-                        if not bucket_stats.empty:
-                            fig = px.line(
-                                bucket_stats,
-                                x='bucket',
-                                y='mean',
-                                markers=True,
-                                title='Efficiency degradation as maintenance is delayed',
-                                labels={'bucket': 'Hours Since Maintenance', 'mean': 'Avg kWh/unit'}
-                            )
-                            fig.add_hline(y=bucket_stats['mean'].min(), line_dash='dash', line_color='green', annotation_text='Best observed')
-                            st.plotly_chart(fig, use_container_width=True)
-
-                            worst_bucket = bucket_stats.sort_values('mean', ascending=False).iloc[0]
-                            st.info(
-                                f"Machines operating {worst_bucket['bucket']} since maintenance consume {worst_bucket['mean']:.2f} kWh/unit on average. "
-                                "Schedule PM before reaching that bucket to stay in optimum efficiency bands."
-                            )
-                except Exception as exc:
-                    st.warning(f"Could not compute efficiency degradation curve: {exc}")
-
-            else:
-                st.info("No maintenance predictions available yet. Process maintenance data through ETL first.")
-
+    with st.expander("Admin / Details", expanded=False):
+        if read_only_runtime:
+            st.caption(
+                "Browse stays available in demo read-only mode. Upload/integration controls are hidden to keep the shell read-only."
+                if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+                else "Browse stays available in pilot review mode. Upload/integration controls are hidden to keep defended-core surfaces read-only."
+            )
+            _render_browse_records_tab(evidence_reader, db_path)
         else:
-            st.info("Maintenance tables not initialized. Upload maintenance data to begin analysis.")
+            st.caption(
+                "Upload and raw browsing stay available for operational work, but the reviewer-facing "
+                "story is the evidence contract above."
+            )
+            upload_tab, browse_tab = st.tabs(["📤 Upload & Integration", "🔍 Browse Records"])
+            with upload_tab:
+                _render_upload_and_integration_controls(db_path, snapshot)
+            with browse_tab:
+                _render_browse_records_tab(evidence_reader, db_path)
 
-    except Exception as e:
-        st.info("No maintenance data processed yet. Upload maintenance records through the section below.")
-    
-    finally:
+
+def _render_status_banner(snapshot: dict[str, object], *, runtime_mode: str = "standard") -> None:
+    total_records = int(snapshot["records_stored"])
+    integrated_machines = int(snapshot["integrated_machine_count"])
+    total_three_way_matches = int(snapshot["total_three_way_matches"])
+    months_covered_count = int(snapshot["months_covered_count"])
+    read_only_runtime = suppress_write_controls(runtime_mode)
+
+    if total_records <= 0:
+        if read_only_runtime:
+            st.warning(
+                "No maintenance records are stored yet. Demo read-only mode keeps upload/integration controls hidden."
+                if normalize_runtime_mode(runtime_mode) == "demo_readonly"
+                else "No maintenance records are stored yet. Pilot review mode keeps upload/integration controls hidden."
+            )
+        else:
+            st.warning(
+                "No maintenance records are stored yet. Upload records in `Admin / Details` to start "
+                "evidence coverage."
+            )
+    elif integrated_machines <= 0:
+        st.warning(
+            "Maintenance records are stored, but no machine-linked evidence is currently available "
+            "on the canonical machine set."
+        )
+    else:
+        if total_three_way_matches > 0:
+            coverage_text = (
+                f"{integrated_machines} of {total_three_way_matches} canonical machines have linked history"
+            )
+        else:
+            coverage_text = f"{integrated_machines} canonical machines have linked history"
+        st.success(
+            f"Maintenance evidence is available from stored records across {months_covered_count} months. "
+            f"{coverage_text}."
+        )
+
+    st.caption(
+        "Legacy maintenance-risk outputs and the maintenance-age energy curve remain supporting evidence only. "
+        "They do not change the page-level coverage status."
+    )
+
+
+def _render_coverage_snapshot(snapshot: dict[str, object]) -> None:
+    with section_shell(
+        "Maintenance Coverage Snapshot",
+        (
+            "Current storage and linkage coverage from the existing maintenance tables. "
+            "These cards make stored scope explicit before any machine-level lookup."
+        ),
+        eyebrow="First-Screen Evidence",
+    ):
+        months_secondary = "No stored month labels yet."
+        if snapshot["months_covered_count"] > 0:
+            months_secondary = (
+                f"{snapshot['earliest_month']} -> {snapshot['latest_month']}"
+                if snapshot["earliest_month"] and snapshot["latest_month"]
+                else "Chronological month-year parsing applied to stored labels."
+            )
+
+        coverage_ratio = snapshot["integration_coverage_ratio"]
+        coverage_primary = "n/a"
+        coverage_secondary = "No canonical machine denominator is available."
+        if coverage_ratio is not None:
+            coverage_primary = f"{float(coverage_ratio) * 100:.1f}%"
+            coverage_secondary = (
+                f"{int(snapshot['integrated_machine_count']):,} of "
+                f"{int(snapshot['total_three_way_matches']):,} canonical machines currently have matched history."
+            )
+
+        cards = [
+            build_stat_card(
+                "Stored Records",
+                snapshot["records_stored"],
+                compact=False,
+                primary_decimals=0,
+                full_decimals=0,
+                none_secondary="No maintenance rows are stored yet.",
+            ),
+            build_stat_card(
+                "Matched Records",
+                snapshot["matched_records_stored"],
+                compact=False,
+                primary_decimals=0,
+                full_decimals=0,
+                none_secondary="No machine-linked maintenance rows are stored yet.",
+            ),
+            build_stat_card(
+                "Integrated Machines",
+                snapshot["integrated_machine_count"],
+                compact=False,
+                primary_decimals=0,
+                full_decimals=0,
+                none_secondary="No canonical machines currently have linked maintenance history.",
+            ),
+            build_surface_card(
+                "Canonical Coverage",
+                coverage_primary,
+                coverage_secondary,
+            ),
+            build_surface_card(
+                "Months Covered",
+                f"{int(snapshot['months_covered_count']):,}",
+                months_secondary,
+            ),
+            build_surface_card(
+                "Latest Stored Event",
+                str(snapshot["latest_maintenance_datetime_label"]),
+                "Latest stored maintenance transaction across all current maintenance rows.",
+            ),
+        ]
+        _render_card_grid(cards, columns=3)
+
+
+def _render_machine_evidence_lookup(evidence_reader: MaintenanceEvidenceReader) -> None:
+    machine_catalog = evidence_reader.build_machine_catalog()
+
+    with section_shell(
+        "Machine Evidence Lookup",
+        (
+            "Select one machine to compare all-time history with the readable recent-history window. "
+            "Total-event and recent-window contracts are shown separately and labeled explicitly."
+        ),
+        eyebrow="Machine-Level Evidence",
+    ):
+        if machine_catalog.empty:
+            st.info(
+                "No machine-linked maintenance history is available yet. Upload records and complete "
+                "matching to unlock machine evidence."
+            )
+            return
+
+        option_labels = [
+            (
+                f"{row['machine_id']} ({int(row['total_events']):,} total events"
+                f" | latest {row['latest_maintenance_datetime_label']})"
+            )
+            for _, row in machine_catalog.iterrows()
+        ]
+        selected_index = st.selectbox(
+            "Select machine",
+            options=range(len(option_labels)),
+            format_func=lambda index: option_labels[index],
+            index=0,
+        )
+        selected_machine_id = str(machine_catalog.iloc[int(selected_index)]["machine_id"])
+        evidence = evidence_reader.build_machine_evidence(
+            selected_machine_id,
+            recent_window_limit=RECENT_HISTORY_LIMIT,
+        )
+
+        cards = [
+            build_stat_card(
+                "Total Events (All Time)",
+                evidence["all_time_event_count"],
+                compact=False,
+                primary_decimals=0,
+                full_decimals=0,
+            ),
+            build_stat_card(
+                "Recent Events Shown",
+                evidence["recent_window_event_count"],
+                compact=False,
+                primary_decimals=0,
+                full_decimals=0,
+                none_secondary="No recent history window is available.",
+            ),
+            build_surface_card(
+                "PM Ratio (All Time)",
+                _format_ratio_percent(evidence["pm_ratio_all_time"]),
+                "PM rows divided by all stored matched events for this machine.",
+            ),
+            build_surface_card(
+                "PM Ratio (Recent Window)",
+                _format_ratio_percent(evidence["pm_ratio_recent_window"]),
+                f"PM rows within the latest {int(evidence['recent_window_event_count']):,} visible events.",
+            ),
+            build_surface_card(
+                "Latest Work Order Type",
+                str(evidence["latest_work_order_type"] or "n/a"),
+                f"Latest maintenance: {evidence['latest_maintenance_datetime_label']}",
+            ),
+            build_surface_card(
+                "Days Since Last Maintenance",
+                _format_nullable_int(evidence["days_since_last_maintenance"]),
+                (
+                    "Current recency from the latest stored maintenance event."
+                    if evidence["days_since_last_maintenance"] is not None
+                    else "No dated maintenance event is available for recency."
+                ),
+            ),
+            build_surface_card(
+                "Months Covered",
+                f"{int(evidence['months_covered_count']):,}",
+                _build_month_range_label(evidence["months_covered"]),
+            ),
+        ]
+        _render_card_grid(cards, columns=4)
+
+        st.caption(
+            f"{evidence['history_window_note']} Showing {int(evidence['recent_window_event_count']):,} "
+            f"of {int(evidence['all_time_event_count']):,} total events."
+        )
+
+        st.markdown("#### Most Recent Maintenance Window")
+        history_df = evidence["recent_history_df"].copy()
+        history_df["maintenance_datetime"] = history_df["maintenance_datetime"].apply(
+            format_maintenance_timestamp
+        )
+        history_df["days_since_previous"] = pd.to_numeric(
+            history_df["days_since_previous"],
+            errors="coerce",
+        ).round(2)
+        st.dataframe(
+            history_df.rename(
+                columns={
+                    "maintenance_datetime": "Date/Time",
+                    "work_order": "Work Order",
+                    "work_order_type": "Type",
+                    "material_code": "Material",
+                    "month_year": "Month",
+                    "days_since_previous": "Days Since Previous",
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+
+def _render_supporting_visuals(evidence_reader: MaintenanceEvidenceReader) -> None:
+    monthly_df = evidence_reader.build_monthly_record_counts()
+    work_order_df = evidence_reader.build_work_order_distribution()
+
+    with section_shell(
+        "Supporting Visuals",
+        (
+            "These visuals summarize the same stored maintenance evidence at platform level. "
+            "They support presentation context but do not replace the machine evidence contract above."
+        ),
+        eyebrow="Operational Context",
+    ):
+        if monthly_df.empty and work_order_df.empty:
+            st.info("No maintenance visuals are available until records are stored.")
+            return
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Records by Month")
+            if monthly_df.empty:
+                st.info("No month-level record counts are available yet.")
+            else:
+                fig = px.bar(
+                    monthly_df,
+                    x="month_year",
+                    y="count",
+                    title="Stored maintenance records by month",
+                    labels={"month_year": "Month", "count": "Records"},
+                )
+                fig.update_layout(
+                    xaxis_title="Month",
+                    yaxis_title="Records",
+                    xaxis_tickangle=-45,
+                    showlegend=False,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("#### Work Order Type Mix")
+            if work_order_df.empty:
+                st.info("No work-order mix is available yet.")
+            else:
+                fig = px.pie(
+                    work_order_df,
+                    values="count",
+                    names="work_order_type",
+                    title="Distribution of stored maintenance types",
+                    hole=0.45,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_energy_context(canonical_energy_reader: CanonicalEnergyReader) -> None:
+    st.caption(
+        "This is an observed weighted energy-intensity profile from canonical `fact_machine_hour` rows. "
+        "It remains supporting context only and should not be read as a predictive-maintenance rule."
+    )
+    try:
+        bucket_stats = canonical_energy_reader.build_maintenance_efficiency_curve()
+    except Exception as exc:
+        st.info(f"Maintenance-age energy context is unavailable: {exc}")
+        return
+
+    if bucket_stats.empty:
+        st.info(
+            "Canonical `fact_machine_hour` does not yet have enough eligible positive-good-qty rows "
+            "with maintenance recency to build this curve."
+        )
+        return
+
+    fig = px.line(
+        bucket_stats,
+        x="bucket",
+        y="weighted_kwh_per_good_unit",
+        markers=True,
+        title="Observed weighted energy intensity by maintenance-age bucket",
+        hover_data={
+            "row_count": True,
+            "total_good_qty": ":,.0f",
+            "total_energy_kwh": ":,.1f",
+        },
+        labels={
+            "bucket": "Hours Since Maintenance",
+            "weighted_kwh_per_good_unit": "Weighted kWh / Good Unit",
+            "row_count": "Rows",
+            "total_good_qty": "Good Qty",
+            "total_energy_kwh": "Energy (kWh)",
+        },
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.info(
+        "Eligibility remains explicit: maintenance recency present, `good_qty > 0`, `energy_total_kwh IS NOT NULL`, "
+        "`0 < kwh_per_good_unit < 20`, and at least 20 rows per bucket."
+    )
+
+
+def _render_legacy_risk_reference(db_path: str) -> None:
+    st.caption(
+        "This is a legacy/admin risk table kept for reference only. It does not drive the main "
+        "maintenance evidence contract and is not reused to score ML or Optimization."
+    )
+
+    conn = sqlite3.connect(db_path)
+    try:
+        risk_df = pd.read_sql_query(
+            """
+            SELECT
+                machine_id,
+                date,
+                days_since_last_maintenance,
+                maintenance_count_30d,
+                maintenance_count_90d,
+                failure_risk_score,
+                recommended_action
+            FROM maintenance_ml_features
+            ORDER BY failure_risk_score DESC, date DESC, machine_id ASC
+            LIMIT 20
+            """,
+            conn,
+        )
+    except Exception as exc:
         conn.close()
-    
-    # File upload section
-    st.markdown("---")
-    st.markdown("### 📤 Upload Maintenance Records")
-    
-    with st.expander("Upload New Maintenance Data", expanded=False):
-        st.info("""
-        Upload monthly maintenance Excel files with the following columns:
+        st.info(f"Legacy/admin maintenance risk view is unavailable: {exc}")
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    if risk_df.empty:
+        st.info("No legacy/admin maintenance risk rows are stored.")
+        return
+
+    risk_df["date"] = risk_df["date"].apply(format_maintenance_timestamp)
+    risk_df["failure_risk_score"] = pd.to_numeric(
+        risk_df["failure_risk_score"],
+        errors="coerce",
+    ).round(2)
+    st.dataframe(
+        risk_df.rename(
+            columns={
+                "machine_id": "Machine",
+                "date": "As Of",
+                "days_since_last_maintenance": "Days Since Last Maintenance",
+                "maintenance_count_30d": "Count 30d",
+                "maintenance_count_90d": "Count 90d",
+                "failure_risk_score": "Legacy Risk Score",
+                "recommended_action": "Recommended Action",
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+
+def _render_upload_and_integration_controls(
+    db_path: str,
+    snapshot: dict[str, object],
+) -> None:
+    st.markdown("#### Upload Maintenance Records")
+    st.caption(
+        "This is the operational upload path. Reviewer-facing coverage and machine evidence remain above."
+    )
+    st.info(
+        f"Current stored records: {int(snapshot['records_stored']):,} | "
+        f"matched records: {int(snapshot['matched_records_stored']):,} | "
+        f"months covered: {int(snapshot['months_covered_count']):,}"
+    )
+    st.markdown(
+        """
+        Upload monthly maintenance Excel files with these expected columns:
         - 工單 (Work Order)
         - 工單類型 (PM/AM/CM/EM)
         - 資產 (Asset ID - MES format)
         - 資產老編號 (Old Asset ID - Energy format)
         - 交易日期 (Transaction Date)
         - 物料編碼 (Material Code)
-        """)
-        
-        uploaded_file = st.file_uploader(
-            "Choose Maintenance Excel File", 
-            type=['xlsx', 'xls'],
-            help="Upload monthly maintenance records for analysis"
+        """
+    )
+
+    uploaded_file = st.file_uploader(
+        "Choose Maintenance Excel File",
+        type=["xlsx", "xls"],
+        help="Upload monthly maintenance records for analysis",
+    )
+
+    if uploaded_file is None:
+        return
+
+    month_col1, month_col2 = st.columns(2)
+    with month_col1:
+        month_options = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ]
+        selected_month = st.selectbox("Select Month", month_options, index=5)
+    with month_col2:
+        selected_year = st.number_input(
+            "Select Year",
+            min_value=2024,
+            max_value=2026,
+            value=2025,
         )
-        
-        if uploaded_file is not None:
-            # Get processing month
-            month_col1, month_col2 = st.columns(2)
-            
-            with month_col1:
-                month_options = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                'July', 'August', 'September', 'October', 'November', 'December']
-                selected_month = st.selectbox("Select Month", month_options, index=5)  # Default to June
-            
-            with month_col2:
-                selected_year = st.number_input("Select Year", min_value=2024, max_value=2026, value=2025)
-            
-            month_year = f"{selected_month} {selected_year}"
-            
-            # Upload mode selection
-            upload_mode = st.radio(
-                "Upload Mode",
-                ["Replace Month Data", "Append New Records"],
-                help="Replace: Remove existing records for this month before uploading. Append: Add to existing records (duplicates will be skipped).",
-                horizontal=True
-            )
-            
-            # Check for existing records and show warning
-            conn = sqlite3.connect('manufacturing_data.db')
-            try:
-                # Count total existing records
-                total_existing = pd.read_sql_query(
-                    "SELECT COUNT(*) as cnt FROM maintenance_records",
-                    conn
-                ).iloc[0]['cnt']
-                
-                if upload_mode == "Replace Month Data":
-                    st.warning(f"""
-                    ⚠️ **Replace Mode Selected**
-                    - Current database has {total_existing:,} total maintenance records
-                    - The uploaded file will replace ALL months it contains
-                    - Records for other months will be preserved
-                    """)
-                else:
-                    st.info(f"""
-                    ℹ️ **Append Mode Selected**  
-                    - Current database has {total_existing:,} total maintenance records
-                    - New unique records will be added
-                    - Duplicates will be automatically skipped
-                    """)
-            except:
-                # Column might not exist in old databases
-                pass
-            finally:
-                conn.close()
-            
-            if st.button("🚀 Process Maintenance Data", type="primary"):
-                try:
-                    # Save uploaded file temporarily
-                    temp_path = Path("temp_uploads") / uploaded_file.name
-                    temp_path.parent.mkdir(exist_ok=True)
-                    
-                    with open(temp_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # Process with maintenance integration
-                    with st.spinner(f"Processing maintenance data for {month_year}..."):
-                        result = integrate_maintenance_with_etl(str(temp_path), month_year)
-                        
-                        if result:
-                            # Save to database
-                            conn = sqlite3.connect('manufacturing_data.db')
-                            cursor = conn.cursor()
-                            
-                            maintenance_df = result['maintenance_records']
-                            
-                            # Get all unique months in the uploaded data
-                            unique_months = maintenance_df['month_year'].unique()
-                            st.info(f"📅 File contains data for: {', '.join(sorted(unique_months))}")
-                            
-                            if upload_mode == "Replace Month Data":
-                                # Delete ALL months that exist in the uploaded file
-                                total_deleted = 0
-                                for month in unique_months:
-                                    cursor.execute("DELETE FROM maintenance_records WHERE month_year = ?", (month,))
-                                    total_deleted += cursor.rowcount
-                                
-                                if total_deleted > 0:
-                                    st.info(f"Replaced {total_deleted:,} existing records across {len(unique_months)} months")
-                                
-                                # Save all new records
-                                maintenance_df.to_sql('maintenance_records', conn, if_exists='append', index=False)
-                                
-                            else:  # Append mode with duplicate checking
-                                # Get existing records for comparison (from ALL months in the file)
-                                placeholders = ','.join(['?' for _ in unique_months])
-                                existing_df = pd.read_sql_query(
-                                    f"SELECT work_order, transaction_date, asset_id, material_code FROM maintenance_records WHERE month_year IN ({placeholders})",
-                                    conn, params=tuple(unique_months)
-                                )
-                                
-                                # Create composite key for duplicate checking
-                                existing_df['composite_key'] = (
-                                    existing_df['work_order'].astype(str) + '_' +
-                                    existing_df['transaction_date'].astype(str) + '_' +
-                                    existing_df['asset_id'].fillna('').astype(str) + '_' +
-                                    existing_df['material_code'].fillna('').astype(str)
-                                )
-                                existing_keys = set(existing_df['composite_key'])
-                                
-                                # Create composite key for new records
-                                maintenance_df['composite_key'] = (
-                                    maintenance_df['work_order'].astype(str) + '_' +
-                                    maintenance_df['transaction_date'].astype(str) + '_' +
-                                    maintenance_df['asset_id'].fillna('').astype(str) + '_' +
-                                    maintenance_df['material_code'].fillna('').astype(str)
-                                )
-                                
-                                # Filter out duplicates
-                                new_records = maintenance_df[~maintenance_df['composite_key'].isin(existing_keys)]
-                                new_records = new_records.drop(columns=['composite_key'])
-                                
-                                if len(new_records) > 0:
-                                    new_records.to_sql('maintenance_records', conn, if_exists='append', index=False)
-                                    st.info(f"Added {len(new_records):,} new records ({len(maintenance_df) - len(new_records):,} duplicates skipped)")
-                                else:
-                                    st.warning("All records already exist. No new records added.")
-                            
-                            # Save metrics
-                            if result['metrics'] is not None:
-                                result['metrics'].to_sql('maintenance_summary', conn, if_exists='replace', index=False)
-                            
-                            # Save predictions
-                            if result['predictions'] is not None:
-                                result['predictions'].to_sql('maintenance_ml_features', conn, if_exists='replace', index=False)
-                            
-                            conn.commit()
-                            conn.close()
-                            
-                            # Show success metrics
-                            total_records = len(maintenance_df)
-                            matched_records = len(maintenance_df[maintenance_df['is_three_way_match'] == 1])
-                            match_rate = (matched_records / total_records * 100) if total_records > 0 else 0
-                            
-                            st.success(f"""
-                            ✅ Successfully processed maintenance data!
-                            - Total records: {total_records:,}
-                            - Matched with production: {matched_records:,} ({match_rate:.1f}%)
-                            - High-risk machines identified: {len(result['predictions'][result['predictions']['risk_level'] == 'HIGH']) if result['predictions'] is not None else 0}
-                            """)
-                            
-                            # Clean up temp file
-                            temp_path.unlink()
-                            
-                            # Refresh page
-                            st.rerun()
-                        
-                        else:
-                            st.error("Failed to process maintenance data. Please check the file format.")
-                    
-                except Exception as e:
-                    st.error(f"Error processing file: {str(e)}")
-                    st.exception(e)
-    
-    # Integration status
-    st.markdown("---")
-    st.markdown("### 🔗 Integration Status")
-    
-    conn = sqlite3.connect('manufacturing_data.db')
-    
-    # Check integration metrics
-    integration_metrics = {}
-    
+
+    month_year = f"{selected_month} {selected_year}"
+    upload_mode = st.radio(
+        "Upload Mode",
+        ["Replace Month Data", "Append New Records"],
+        help=(
+            "Replace removes existing rows for any month found in the uploaded file before writing the new rows. "
+            "Append adds only new unique rows."
+        ),
+        horizontal=True,
+    )
+
+    if upload_mode == "Replace Month Data":
+        st.warning(
+            "Replace mode will remove existing rows for every month found in the uploaded file, "
+            "then write the new rows for those months only."
+        )
+    else:
+        st.info("Append mode keeps existing rows and skips duplicates using a composite-key check.")
+
+    if not st.button("Process Maintenance Data", type="primary"):
+        return
+
+    temp_path = Path("temp_uploads") / uploaded_file.name
+    temp_path.parent.mkdir(exist_ok=True)
+
     try:
-        # Count maintenance records
-        maint_count = pd.read_sql_query(
-            "SELECT COUNT(*) as cnt FROM maintenance_records", conn
-        ).iloc[0]['cnt']
-        integration_metrics['Total Maintenance Records'] = f"{maint_count:,}"
-        
-        # Count matched machines
-        matched_machines = pd.read_sql_query("""
-            SELECT COUNT(DISTINCT machine_id) as cnt 
-            FROM maintenance_records 
-            WHERE is_three_way_match = 1
-        """, conn).iloc[0]['cnt']
-        integration_metrics['Matched Machines'] = matched_machines
-        
-        # Count three-way matches
-        three_way_count = pd.read_sql_query(
-            "SELECT COUNT(*) as cnt FROM three_way_matches", conn
-        ).iloc[0]['cnt']
-        integration_metrics['Three-Way Matches Available'] = three_way_count
-        
-        # Display metrics
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Maintenance Records", integration_metrics.get('Total Maintenance Records', '0'))
-        
-        with col2:
-            st.metric("Integrated Machines", integration_metrics.get('Matched Machines', 0))
-        
-        with col3:
-            match_coverage = (integration_metrics.get('Matched Machines', 0) / three_way_count * 100) if three_way_count > 0 else 0
-            st.metric("Integration Coverage", f"{match_coverage:.1f}%")
-        
-    except:
-        st.info("Maintenance module ready. Upload data to begin integration.")
-    
+        with open(temp_path, "wb") as handle:
+            handle.write(uploaded_file.getbuffer())
+
+        with st.spinner(f"Processing maintenance data for {month_year}..."):
+            result = integrate_maintenance_with_etl(str(temp_path), month_year)
+
+        if not result:
+            st.error("Failed to process maintenance data. Please check the file format.")
+            return
+
+        maintenance_df = result["maintenance_records"]
+        unique_months = sorted(set(maintenance_df["month_year"].dropna().astype(str).tolist()))
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        try:
+            st.info(f"File contains data for: {', '.join(unique_months)}")
+
+            if upload_mode == "Replace Month Data":
+                total_deleted = 0
+                for month in unique_months:
+                    cursor.execute(
+                        "DELETE FROM maintenance_records WHERE month_year = ?",
+                        (month,),
+                    )
+                    total_deleted += cursor.rowcount
+                if total_deleted > 0:
+                    st.info(
+                        f"Replaced {total_deleted:,} existing records across {len(unique_months):,} months."
+                    )
+                maintenance_df.to_sql("maintenance_records", conn, if_exists="append", index=False)
+            else:
+                existing_df = pd.read_sql_query(
+                    (
+                        "SELECT work_order, transaction_date, asset_id, material_code "
+                        "FROM maintenance_records "
+                        f"WHERE month_year IN ({','.join(['?' for _ in unique_months])})"
+                    ),
+                    conn,
+                    params=tuple(unique_months),
+                )
+                existing_df["composite_key"] = (
+                    existing_df["work_order"].astype(str)
+                    + "_"
+                    + existing_df["transaction_date"].astype(str)
+                    + "_"
+                    + existing_df["asset_id"].fillna("").astype(str)
+                    + "_"
+                    + existing_df["material_code"].fillna("").astype(str)
+                )
+                maintenance_df = maintenance_df.copy()
+                maintenance_df["composite_key"] = (
+                    maintenance_df["work_order"].astype(str)
+                    + "_"
+                    + maintenance_df["transaction_date"].astype(str)
+                    + "_"
+                    + maintenance_df["asset_id"].fillna("").astype(str)
+                    + "_"
+                    + maintenance_df["material_code"].fillna("").astype(str)
+                )
+                existing_keys = set(existing_df["composite_key"].tolist())
+                new_records = maintenance_df[~maintenance_df["composite_key"].isin(existing_keys)].copy()
+                new_records = new_records.drop(columns=["composite_key"])
+                if new_records.empty:
+                    st.warning("All uploaded rows already exist. No new records were added.")
+                else:
+                    new_records.to_sql("maintenance_records", conn, if_exists="append", index=False)
+                    st.info(
+                        f"Added {len(new_records):,} new rows; "
+                        f"{len(maintenance_df) - len(new_records):,} duplicates were skipped."
+                    )
+
+            if result["metrics"] is not None:
+                result["metrics"].to_sql("maintenance_summary", conn, if_exists="replace", index=False)
+            if result["predictions"] is not None:
+                result["predictions"].to_sql(
+                    "maintenance_ml_features",
+                    conn,
+                    if_exists="replace",
+                    index=False,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        total_records = len(maintenance_df)
+        matched_records = int((maintenance_df["is_three_way_match"] == 1).sum())
+        match_rate = (matched_records / total_records * 100.0) if total_records > 0 else 0.0
+        st.success(
+            f"Processed {total_records:,} rows. Matched rows: {matched_records:,} ({match_rate:.1f}%)."
+        )
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Error processing file: {exc}")
+        st.exception(exc)
     finally:
-        conn.close()
-    
-    # Database Viewer Section
-    st.markdown("---")
-    st.markdown("### 🔍 Database Viewer")
-    
-    viewer_tabs = st.tabs(["📊 Browse Records", "🏭 Machine History", "📈 Statistics"])
-    
-    with viewer_tabs[0]:
-        st.markdown("#### Browse Maintenance Records")
-        
-        conn = sqlite3.connect('manufacturing_data.db')
-        
-        # Filters
+        temp_path.unlink(missing_ok=True)
+
+
+def _render_browse_records_tab(
+    evidence_reader: MaintenanceEvidenceReader,
+    db_path: str,
+) -> None:
+    st.markdown("#### Browse Maintenance Records")
+    st.caption(
+        "Month options use the same chronological month-year parser as the main coverage visuals."
+    )
+
+    conn = sqlite3.connect(db_path)
+    try:
+        if not _table_exists(conn, "maintenance_records"):
+            st.info("No maintenance records are stored yet.")
+            return
+
+        month_options = evidence_reader.get_available_months()
+        machines_df = pd.read_sql_query(
+            """
+            SELECT DISTINCT machine_id
+            FROM maintenance_records
+            WHERE machine_id IS NOT NULL
+              AND trim(machine_id) <> ''
+            ORDER BY machine_id ASC
+            """,
+            conn,
+        )
+
         col1, col2, col3 = st.columns(3)
-        
         with col1:
-            # Get available months
-            months_df = pd.read_sql_query("""
-                SELECT DISTINCT month_year 
-                FROM maintenance_records 
-                ORDER BY month_year
-            """, conn)
-            
             selected_months = st.multiselect(
                 "Filter by Month",
-                options=months_df['month_year'].tolist(),
-                default=None
+                options=month_options,
+                default=None,
             )
-        
         with col2:
-            # Get machine list
-            machines_df = pd.read_sql_query("""
-                SELECT DISTINCT machine_id 
-                FROM maintenance_records 
-                WHERE machine_id IS NOT NULL 
-                ORDER BY machine_id
-            """, conn)
-            
             selected_machine = st.selectbox(
                 "Filter by Machine",
-                options=['All'] + machines_df['machine_id'].tolist(),
-                index=0
+                options=["All"] + machines_df["machine_id"].tolist(),
+                index=0,
             )
-        
         with col3:
-            work_types = ['All', 'PM', 'CM', 'EM', 'AM']
             selected_type = st.selectbox(
                 "Filter by Type",
-                options=work_types,
-                index=0
+                options=["All", "AM", "CM", "PM", "EM", "EV", "OP", "SA"],
+                index=0,
             )
-        
-        # Build query
+
         query = "SELECT * FROM maintenance_records WHERE 1=1"
-        params = []
-        
+        params: list[object] = []
         if selected_months:
-            placeholders = ','.join(['?' for _ in selected_months])
+            placeholders = ",".join(["?" for _ in selected_months])
             query += f" AND month_year IN ({placeholders})"
             params.extend(selected_months)
-        
-        if selected_machine != 'All':
+        if selected_machine != "All":
             query += " AND machine_id = ?"
             params.append(selected_machine)
-        
-        if selected_type != 'All':
+        if selected_type != "All":
             query += " AND work_order_type = ?"
             params.append(selected_type)
-        
         query += " ORDER BY transaction_date DESC LIMIT 100"
-        
-        # Execute query
+
         records_df = pd.read_sql_query(query, conn, params=params)
-        
-        if len(records_df) > 0:
-            st.info(f"Showing {len(records_df)} records (limited to 100)")
-            
-            # Display key columns
-            display_cols = ['machine_id', 'transaction_date', 'work_order', 'work_order_type', 
-                          'material_code', 'month_year', 'is_three_way_match']
-            display_df = records_df[display_cols].copy()
-            display_df['is_three_way_match'] = display_df['is_three_way_match'].map({1: '✅', 0: '❌'})
-            
-            st.dataframe(display_df, use_container_width=True)
-            
-            # Export option
-            csv = display_df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download as CSV",
-                data=csv,
-                file_name=f"maintenance_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("No records found with selected filters")
-        
+    finally:
         conn.close()
-    
-    with viewer_tabs[1]:
-        st.markdown("#### Machine Maintenance History")
-        
-        conn = sqlite3.connect('manufacturing_data.db')
-        
-        # Machine selector
-        machines_with_maint = pd.read_sql_query("""
-            SELECT DISTINCT machine_id, COUNT(*) as count
-            FROM machine_maintenance_history
-            GROUP BY machine_id
-            ORDER BY count DESC
-        """, conn)
-        
-        if len(machines_with_maint) > 0:
-            machine_options = [f"{row['machine_id']} ({row['count']} events)" 
-                              for _, row in machines_with_maint.iterrows()]
-            machine_ids = machines_with_maint['machine_id'].tolist()
-            
-            selected_idx = st.selectbox(
-                "Select Machine",
-                options=range(len(machine_options)),
-                format_func=lambda x: machine_options[x],
-                index=0
-            )
-            
-            selected_machine_id = machine_ids[selected_idx]
-            
-            # Get machine history
-            history_df = pd.read_sql_query("""
-                SELECT 
-                    maintenance_datetime,
-                    work_order,
-                    work_order_type,
-                    material_code,
-                    days_since_prev,
-                    maintenance_seq
-                FROM machine_maintenance_history
-                WHERE machine_id = ?
-                ORDER BY maintenance_datetime DESC
-                LIMIT 50
-            """, conn, params=(selected_machine_id,))
-            
-            if len(history_df) > 0:
-                # Calculate statistics
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    total_events = machines_with_maint[machines_with_maint['machine_id'] == selected_machine_id]['count'].values[0]
-                    st.metric("Total Events", int(total_events))
-                
-                with col2:
-                    avg_interval = history_df['days_since_prev'].mean()
-                    st.metric("Avg Days Between", f"{avg_interval:.1f}" if pd.notna(avg_interval) else "N/A")
-                
-                with col3:
-                    type_counts = history_df['work_order_type'].value_counts()
-                    pm_ratio = (type_counts.get('PM', 0) / len(history_df) * 100) if len(history_df) > 0 else 0
-                    st.metric("PM Ratio", f"{pm_ratio:.1f}%")
-                
-                with col4:
-                    last_maint = history_df['maintenance_datetime'].iloc[0] if len(history_df) > 0 else None
-                    if last_maint:
-                        days_ago = (pd.Timestamp.now() - pd.to_datetime(last_maint)).days
-                        st.metric("Days Since Last", days_ago)
-                
-                # Show history table
-                st.markdown("##### Recent Maintenance History")
-                display_history = history_df[['maintenance_datetime', 'work_order_type', 'material_code', 'days_since_prev']].copy()
-                display_history['maintenance_datetime'] = pd.to_datetime(display_history['maintenance_datetime']).dt.strftime('%Y-%m-%d %H:%M')
-                display_history.columns = ['Date/Time', 'Type', 'Material', 'Days Since Previous']
-                
-                st.dataframe(display_history, use_container_width=True)
-        else:
-            st.info("No maintenance history available")
-        
-        conn.close()
-    
-    with viewer_tabs[2]:
-        st.markdown("#### Maintenance Statistics")
-        
-        conn = sqlite3.connect('manufacturing_data.db')
-        
-        # Overall statistics
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("##### Records by Month")
-            monthly_stats = pd.read_sql_query("""
-                SELECT month_year, COUNT(*) as count
-                FROM maintenance_records
-                GROUP BY month_year
-                ORDER BY month_year
-            """, conn)
-            
-            if len(monthly_stats) > 0:
-                st.bar_chart(monthly_stats.set_index('month_year')['count'])
-        
-        with col2:
-            st.markdown("##### Work Order Types")
-            type_stats = pd.read_sql_query("""
-                SELECT work_order_type, COUNT(*) as count
-                FROM maintenance_records
-                WHERE work_order_type IS NOT NULL
-                GROUP BY work_order_type
-            """, conn)
-            
-            if len(type_stats) > 0:
-                import plotly.express as px
-                fig = px.pie(type_stats, values='count', names='work_order_type', 
-                           title="Distribution of Maintenance Types")
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # Top machines by maintenance
-        st.markdown("##### Top 10 Machines by Maintenance Frequency")
-        top_machines = pd.read_sql_query("""
-            SELECT machine_id, COUNT(*) as maintenance_count
-            FROM maintenance_records
-            WHERE is_three_way_match = 1 AND machine_id IS NOT NULL
-            GROUP BY machine_id
-            ORDER BY maintenance_count DESC
-            LIMIT 10
-        """, conn)
-        
-        if len(top_machines) > 0:
-            st.bar_chart(top_machines.set_index('machine_id')['maintenance_count'])
-        
-        conn.close()
+
+    if records_df.empty:
+        st.warning("No records matched the current filters.")
+        return
+
+    display_df = records_df.loc[
+        :,
+        [
+            "machine_id",
+            "transaction_date",
+            "work_order",
+            "work_order_type",
+            "material_code",
+            "month_year",
+            "is_three_way_match",
+        ],
+    ].copy()
+    display_df["transaction_date"] = display_df["transaction_date"].apply(format_maintenance_timestamp)
+    display_df["is_three_way_match"] = display_df["is_three_way_match"].map({1: "Yes", 0: "No"})
+
+    st.info(f"Showing {len(display_df):,} records (limited to the latest 100 rows).")
+    st.dataframe(
+        display_df.rename(
+            columns={
+                "machine_id": "Machine",
+                "transaction_date": "Date/Time",
+                "work_order": "Work Order",
+                "work_order_type": "Type",
+                "material_code": "Material",
+                "month_year": "Month",
+                "is_three_way_match": "Matched",
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    csv_data = display_df.to_csv(index=False)
+    st.download_button(
+        label="Download filtered records as CSV",
+        data=csv_data,
+        file_name=f"maintenance_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+    )
+
+
+def _render_card_grid(cards: list[dict[str, str]], *, columns: int) -> None:
+    for start_index in range(0, len(cards), columns):
+        row_cards = cards[start_index : start_index + columns]
+        row_columns = st.columns(columns)
+        for column, card in zip(row_columns, row_cards):
+            with column:
+                render_surface_card(card)
+
+
+def _format_ratio_percent(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{float(value) * 100:.1f}%"
+
+
+def _format_nullable_int(value: int | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{int(value):,}"
+
+
+def _build_month_range_label(months: list[str]) -> str:
+    if not months:
+        return "No stored month labels for this machine."
+    if len(months) == 1:
+        return months[0]
+    return f"{months[0]} -> {months[-1]}"
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+__all__ = ["render_maintenance_page"]

@@ -3,11 +3,17 @@ Maintenance Data Integration Module
 Extends your existing ETL pipeline with predictive maintenance capabilities
 """
 
+from __future__ import annotations
+
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import sqlite3
 from typing import Dict, List, Tuple
+
+from core.bronze_raw_store import BronzeRawStore
+from core.machine_alias_registry import build_machine_resolution_metadata, load_machine_alias_registry
+from core.runtime_paths import get_database_path
 
 class MaintenanceDataIntegration:
     """
@@ -15,9 +21,19 @@ class MaintenanceDataIntegration:
     Enables predictive maintenance ML models
     """
     
-    def __init__(self, db_path='manufacturing_data.db'):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = str(db_path or get_database_path())
+        self._machine_alias_registry = load_machine_alias_registry()
+        self._bronze_store = BronzeRawStore(self.db_path)
         self.init_maintenance_tables()
+
+    @staticmethod
+    def _ensure_table_columns(cursor, table_name: str, columns: Dict[str, str]) -> None:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing_columns = {column[1] for column in cursor.fetchall()}
+        for column_name, column_type in columns.items():
+            if column_name not in existing_columns:
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
         
     def init_maintenance_tables(self):
         """Create maintenance-specific tables in your existing database"""
@@ -55,10 +71,26 @@ class MaintenanceDataIntegration:
                 -- Linking to your existing system
                 machine_id TEXT,        -- Your normalized format
                 is_three_way_match INTEGER,
+                canonical_machine_id TEXT,
+                matched_on TEXT,
+                matched_value TEXT,
+                exception_applied INTEGER,
+                source_system TEXT,
+                scope_status TEXT,
+                join_status TEXT,
                 
                 FOREIGN KEY (machine_id) REFERENCES three_way_matches(machine_id)
             )
         ''')
+        self._ensure_table_columns(cursor, 'maintenance_records', {
+            'canonical_machine_id': 'TEXT',
+            'matched_on': 'TEXT',
+            'matched_value': 'TEXT',
+            'exception_applied': 'INTEGER',
+            'source_system': 'TEXT',
+            'scope_status': 'TEXT',
+            'join_status': 'TEXT',
+        })
         
         # Maintenance summary by machine
         cursor.execute('''
@@ -127,11 +159,39 @@ class MaintenanceDataIntegration:
         
         # Parse dates
         df['交易日期'] = pd.to_datetime(df['交易日期'], errors='coerce')
+        df['source_file'] = str(maintenance_file)
         
         # Extract and normalize machine IDs
         df['normalized_id'] = df.apply(self._normalize_maintenance_id, axis=1)
+        resolution_rows = [
+            self._resolve_maintenance_machine(row)
+            for _, row in df.iterrows()
+        ]
+        resolution_df = pd.DataFrame(resolution_rows, index=df.index)
+        df = pd.concat([df, resolution_df], axis=1)
+        self._bronze_store.write_maintenance_rows(df)
         
         return df
+
+    def _resolve_maintenance_machine(self, row) -> Dict[str, object]:
+        candidate_values = [
+            row.get('資產', ''),
+            row.get('資產老編號', ''),
+            row.get('normalized_id', ''),
+        ]
+        for candidate in candidate_values:
+            metadata = build_machine_resolution_metadata(
+                candidate,
+                'maintenance',
+                registry=self._machine_alias_registry,
+            )
+            if metadata.get('canonical_machine_id'):
+                return metadata
+        return build_machine_resolution_metadata(
+            '',
+            'maintenance',
+            registry=self._machine_alias_registry,
+        )
     
     def _normalize_maintenance_id(self, row) -> str:
         """
@@ -189,9 +249,15 @@ class MaintenanceDataIntegration:
         for idx, maint_row in maintenance_df.iterrows():
             normalized = maint_row['normalized_id']
             asset_id = maint_row.get('資產', '')
+            canonical_id = maint_row.get('canonical_machine_id')
             
-            # Try normalized ID first
-            if normalized in machine_mapping:
+            # Try canonical registry mapping first
+            if canonical_id and canonical_id in machine_mapping:
+                matches += 1
+                maintenance_df.loc[idx, 'machine_id'] = canonical_id
+                maintenance_df.loc[idx, 'is_three_way_match'] = 1
+            # Fallback to legacy normalized ID
+            elif normalized in machine_mapping:
                 matches += 1
                 maintenance_df.loc[idx, 'machine_id'] = normalized
                 maintenance_df.loc[idx, 'is_three_way_match'] = 1
@@ -201,9 +267,9 @@ class MaintenanceDataIntegration:
                 maintenance_df.loc[idx, 'machine_id'] = mes_mapping[asset_id]
                 maintenance_df.loc[idx, 'is_three_way_match'] = 1
             else:
-                maintenance_df.loc[idx, 'machine_id'] = normalized
+                maintenance_df.loc[idx, 'machine_id'] = canonical_id or normalized
                 maintenance_df.loc[idx, 'is_three_way_match'] = 0
-                unmatched.append(normalized)
+                unmatched.append(canonical_id or normalized)
         
         print(f"✅ Matched {matches}/{len(maintenance_df)} records to three-way machines")
         print(f"   Match rate: {matches/len(maintenance_df)*100:.1f}%")
@@ -227,7 +293,7 @@ class MaintenanceDataIntegration:
             '成本中心': 'cost_center',
             '維護人員': 'maintenance_team',
             '維護部門': 'maintenance_dept',
-            '核准者': 'approver'
+            '核准者': 'approver',
         }
         
         # Rename columns that exist
@@ -240,7 +306,9 @@ class MaintenanceDataIntegration:
             'asset_id', 'asset_old_id', 'asset_desc', 'asset_type',
             'material_code', 'material_desc', 'quantity', 'unit',
             'cost_center', 'maintenance_team', 'maintenance_dept', 'approver',
-            'machine_id', 'is_three_way_match'
+            'machine_id', 'is_three_way_match',
+            'canonical_machine_id', 'matched_on', 'matched_value',
+            'exception_applied', 'source_system', 'scope_status', 'join_status',
         ]
         
         # Keep only columns that exist in both dataframe and database schema
@@ -252,6 +320,8 @@ class MaintenanceDataIntegration:
             maintenance_df['machine_id'] = None
         if 'is_three_way_match' not in maintenance_df.columns:
             maintenance_df['is_three_way_match'] = 0
+        if 'exception_applied' in maintenance_df.columns:
+            maintenance_df['exception_applied'] = maintenance_df['exception_applied'].fillna(False).astype(int)
         
         conn.close()
         return maintenance_df
@@ -398,12 +468,16 @@ class MaintenanceDataIntegration:
 
 
 # Integration function to add to your existing ETL pipeline
-def integrate_maintenance_with_etl(maintenance_file: str, month_year: str):
+def integrate_maintenance_with_etl(
+    maintenance_file: str,
+    month_year: str,
+    db_path: str | None = None,
+):
     """
     Main integration function - call this after your ETL process
     """
     # Initialize maintenance module
-    maint = MaintenanceDataIntegration()
+    maint = MaintenanceDataIntegration(db_path=db_path)
     
     # Load maintenance data
     maint_df = maint.load_maintenance_data(maintenance_file, month_year)
@@ -423,7 +497,7 @@ def integrate_maintenance_with_etl(maintenance_file: str, month_year: str):
         print(f"{machine_id}: {row['total_events']} events (PM:{row['preventive']}, CM:{row['corrective']})")
     
     # Load unified view for ML features
-    conn = sqlite3.connect('manufacturing_data.db')
+    conn = sqlite3.connect(maint.db_path)
     unified_view = pd.read_sql_query("""
         SELECT * FROM unified_view 
         WHERE month_year = ?

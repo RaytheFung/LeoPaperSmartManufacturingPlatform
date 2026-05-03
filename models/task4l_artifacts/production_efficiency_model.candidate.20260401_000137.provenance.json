@@ -1,0 +1,156 @@
+{
+  "active_db_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/manufacturing_data.db",
+  "all_model_metrics": {
+    "linear_regression": {
+      "distinct_machines_retained": 76,
+      "eval_months": [
+        "May 2025",
+        "June 2025"
+      ],
+      "eval_rows": 64950,
+      "evaluation_strategy": "time_aware_multi_month_holdout",
+      "mae": 0.04420353219349793,
+      "r2_score": 0.01052437096385761,
+      "rmse": 0.3004588996150728,
+      "rows_after_filtering": 132549,
+      "rows_after_hard_block": 133299,
+      "rows_loaded": 378352,
+      "train_months": [
+        "January 2025",
+        "February 2025",
+        "March 2025",
+        "April 2025"
+      ],
+      "train_rows": 67599
+    },
+    "random_forest": {
+      "distinct_machines_retained": 76,
+      "eval_months": [
+        "May 2025",
+        "June 2025"
+      ],
+      "eval_rows": 64950,
+      "evaluation_strategy": "time_aware_multi_month_holdout",
+      "mae": 0.012031498601255491,
+      "r2_score": 0.8065397899688995,
+      "rmse": 0.13285513617464034,
+      "rows_after_filtering": 132549,
+      "rows_after_hard_block": 133299,
+      "rows_loaded": 378352,
+      "train_months": [
+        "January 2025",
+        "February 2025",
+        "March 2025",
+        "April 2025"
+      ],
+      "train_rows": 67599
+    },
+    "xgboost": {
+      "distinct_machines_retained": 76,
+      "eval_months": [
+        "May 2025",
+        "June 2025"
+      ],
+      "eval_rows": 64950,
+      "evaluation_strategy": "time_aware_multi_month_holdout",
+      "mae": 0.020187472640957358,
+      "r2_score": 0.37891858092626207,
+      "rmse": 0.2380437535427996,
+      "rows_after_filtering": 132549,
+      "rows_after_hard_block": 133299,
+      "rows_loaded": 378352,
+      "train_months": [
+        "January 2025",
+        "February 2025",
+        "March 2025",
+        "April 2025"
+      ],
+      "train_rows": 67599
+    }
+  },
+  "artifact_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4l_artifacts/production_efficiency_model.candidate.20260401_000137.pkl",
+  "artifact_role": "model",
+  "artifact_state": "candidate",
+  "artifact_version_id": "20260401_000137",
+  "backup_model_path": null,
+  "backup_preprocessor_path": null,
+  "candidate_model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4l_artifacts/production_efficiency_model.candidate.20260401_000137.pkl",
+  "candidate_preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/task4l_artifacts/production_preprocessor.candidate.20260401_000137.pkl",
+  "distinct_machines_after_filtering": 76,
+  "eval_months": [
+    "May 2025",
+    "June 2025"
+  ],
+  "eval_rows": 64950,
+  "evaluation_strategy": "time_aware_multi_month_holdout",
+  "feature_columns": [
+    "hour_of_day",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "is_night_shift",
+    "machine_type_encoded",
+    "machine_number",
+    "team_size",
+    "task_complexity",
+    "hours_since_last_maintenance",
+    "maintenance_urgency",
+    "needs_maintenance",
+    "maintenance_intensity_30d",
+    "cumulative_maintenance_count",
+    "production_qty",
+    "last_maintenance_type_encoded",
+    "team_leader_encoded",
+    "material_code_encoded"
+  ],
+  "feature_contract_version": "canonical_fact_machine_hour_ml_v1",
+  "model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_efficiency_model.pkl",
+  "month_coverage": [
+    "January 2025",
+    "February 2025",
+    "March 2025",
+    "April 2025",
+    "May 2025",
+    "June 2025"
+  ],
+  "predictor_smoke": null,
+  "preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_preprocessor.pkl",
+  "promoted_at": null,
+  "promotion_success": false,
+  "rows_after_filtering": 132549,
+  "rows_after_hard_block": 133299,
+  "rows_loaded": 378352,
+  "selected_model": "random_forest",
+  "selected_model_metrics": {
+    "distinct_machines_retained": 76,
+    "eval_months": [
+      "May 2025",
+      "June 2025"
+    ],
+    "eval_rows": 64950,
+    "evaluation_strategy": "time_aware_multi_month_holdout",
+    "mae": 0.012031498601255491,
+    "r2_score": 0.8065397899688995,
+    "rmse": 0.13285513617464034,
+    "rows_after_filtering": 132549,
+    "rows_after_hard_block": 133299,
+    "rows_loaded": 378352,
+    "train_months": [
+      "January 2025",
+      "February 2025",
+      "March 2025",
+      "April 2025"
+    ],
+    "train_rows": 67599
+  },
+  "task_tag": "Task 4L",
+  "train_months": [
+    "January 2025",
+    "February 2025",
+    "March 2025",
+    "April 2025"
+  ],
+  "train_rows": 67599,
+  "trained_at": "2026-04-01T00:20:02.059319",
+  "training_source": "fact_machine_hour"
+}

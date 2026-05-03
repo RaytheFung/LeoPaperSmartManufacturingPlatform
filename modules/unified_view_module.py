@@ -18,6 +18,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import numpy as np
+import html
 from datetime import datetime, timedelta
 import json
 import os
@@ -27,6 +28,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # Import the EUVG components we need
+from core.canonical_gold_reader import (
+    CANONICAL_GOLD_SAMPLE_COLUMNS,
+    CanonicalGoldReader,
+)
+from core.canonical_materializer import CanonicalMaterializer
+from core.data_utils import get_month_year_from_datetime
+from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
+from core.runtime_paths import get_data_dir, get_database_path, get_etl_outputs_dir, get_repo_root
 from modules.euvg_module import EnhancedUnifiedViewGenerator, EnergyAttributionSystem, TeamSynergyAnalyzer
 
 
@@ -36,8 +45,8 @@ class UnifiedViewProcessor:
     Stores results in SQLite for ML consumption
     """
     
-    def __init__(self, db_path='manufacturing_data.db'):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = str(db_path or get_database_path())
         self.init_database()
         
     def init_database(self):
@@ -211,25 +220,25 @@ class UnifiedViewProcessor:
         month_prefix = month_year.replace(' ', '_')  # e.g., "January_2025"
         
         # Search for files in data directory
-        search_dir = 'data'
+        search_dir = get_data_dir()
         found_files = {'energy': [], 'csi': None, 'mes': None}
         
-        if os.path.exists(search_dir):
+        if search_dir.exists():
             # Look for files with the exact naming pattern from ETL
             # Energy files: {month_year}_energy_{number}.xlsx
-            energy_pattern = os.path.join(search_dir, f"{month_prefix}_energy_*.xlsx")
+            energy_pattern = str(search_dir / f"{month_prefix}_energy_*.xlsx")
             energy_files = glob.glob(energy_pattern)
             found_files['energy'] = energy_files
             
             # CSI file: {month_year}_csi.xlsx
-            csi_path = os.path.join(search_dir, f"{month_prefix}_csi.xlsx")
-            if os.path.exists(csi_path):
-                found_files['csi'] = csi_path
+            csi_path = search_dir / f"{month_prefix}_csi.xlsx"
+            if csi_path.exists():
+                found_files['csi'] = str(csi_path)
             
             # MES file: {month_year}_mes.xlsx
-            mes_path = os.path.join(search_dir, f"{month_prefix}_mes.xlsx")
-            if os.path.exists(mes_path):
-                found_files['mes'] = mes_path
+            mes_path = search_dir / f"{month_prefix}_mes.xlsx"
+            if mes_path.exists():
+                found_files['mes'] = str(mes_path)
         
         # Fallback: Also check for June test files in current directory
         if month_year == 'June 2025' and (not found_files['energy'] or not found_files['csi'] or not found_files['mes']):
@@ -240,13 +249,14 @@ class UnifiedViewProcessor:
             
             patterns = month_patterns.get(month_name, [month_name])
             
+            repo_root = get_repo_root()
             for pattern in patterns:
                 # Energy files (can be multiple)
                 if not found_files['energy']:
                     energy_patterns = [
-                        f'*能耗*{pattern}*.xlsx',
-                        f'*能耗*{pattern}*.xls',
-                        f'*energy*{pattern}*.xlsx'
+                        str(repo_root / f'*能耗*{pattern}*.xlsx'),
+                        str(repo_root / f'*能耗*{pattern}*.xls'),
+                        str(repo_root / f'*energy*{pattern}*.xlsx')
                     ]
                     for ep in energy_patterns:
                         energy_files = glob.glob(ep, recursive=False)
@@ -255,9 +265,9 @@ class UnifiedViewProcessor:
                 # CSI file (single)
                 if not found_files['csi']:
                     csi_patterns = [
-                        f'*CSI*{pattern}*.xlsx',
-                        f'*CSI*{pattern}*.xls',
-                        f'*csi*{pattern}*.xlsx'
+                        str(repo_root / f'*CSI*{pattern}*.xlsx'),
+                        str(repo_root / f'*CSI*{pattern}*.xls'),
+                        str(repo_root / f'*csi*{pattern}*.xlsx')
                     ]
                     for cp in csi_patterns:
                         csi_files = glob.glob(cp, recursive=False)
@@ -268,9 +278,9 @@ class UnifiedViewProcessor:
                 # MES file (single)
                 if not found_files['mes']:
                     mes_patterns = [
-                        f'*MES*{pattern}*.xlsx',
-                        f'*MES*{pattern}*.xls',
-                        f'*mes*{pattern}*.xlsx'
+                        str(repo_root / f'*MES*{pattern}*.xlsx'),
+                        str(repo_root / f'*MES*{pattern}*.xls'),
+                        str(repo_root / f'*mes*{pattern}*.xlsx')
                     ]
                     for mp in mes_patterns:
                         mes_files = glob.glob(mp, recursive=False)
@@ -316,24 +326,22 @@ class UnifiedViewProcessor:
         files = self.find_data_files(month_year)
         
         if not files['energy'] or not files['csi'] or not files['mes']:
-            # Check if we have ETL output files and can reconstruct from Excel reports
-            import os
-            
             # Try to use ETL Excel output files as fallback
-            etl_excel_path = f"etl_outputs/{month_year.lower().replace(' ', '_')}_etl_report.xlsx"
+            etl_outputs_dir = get_etl_outputs_dir()
+            etl_excel_path = etl_outputs_dir / f"{month_year.lower().replace(' ', '_')}_etl_report.xlsx"
             
-            if os.path.exists(etl_excel_path):
+            if etl_excel_path.exists():
                 # Use the ETL report as a data source
-                return self._process_from_etl_report(month_year, etl_excel_path)
+                return self._process_from_etl_report(month_year, str(etl_excel_path))
             
             # Check for ETL JSON to see if data was previously uploaded
             etl_json_patterns = [
-                f"etl_outputs/{month_year.lower().replace(' ', '_')}_etl_report_mappings.json",
-                f"etl_outputs/{month_year.lower().replace(' ', ' ')}_etl_report_mappings.json",
-                f"etl_outputs/{month_year.split()[0].lower()}_{month_year.split()[1]}_etl_report_mappings.json"
+                etl_outputs_dir / f"{month_year.lower().replace(' ', '_')}_etl_report_mappings.json",
+                etl_outputs_dir / f"{month_year.lower().replace(' ', ' ')}_etl_report_mappings.json",
+                etl_outputs_dir / f"{month_year.split()[0].lower()}_{month_year.split()[1]}_etl_report_mappings.json"
             ]
             
-            etl_exists = any(os.path.exists(f) for f in etl_json_patterns)
+            etl_exists = any(path.exists() for path in etl_json_patterns)
             
             if etl_exists:
                 # Try alternative processing using minimal data from database
@@ -379,11 +387,6 @@ class UnifiedViewProcessor:
             }
         
         # Initialize EUVG and load data
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
-        
         etl = EnhancedSmartManufacturingETL()
         etl.extract_all_sources(files['energy'], files['csi'], files['mes'])
         
@@ -769,7 +772,6 @@ class UnifiedViewProcessor:
             
             # Create record for this hour
             # Automatically derive month_year from the datetime
-            from data_utils import get_month_year_from_datetime
             auto_month_year = get_month_year_from_datetime(hour)
             
             record = {
@@ -1440,378 +1442,591 @@ class UnifiedViewProcessor:
 
 
 def render_unified_view_page():
-    """Main UI for Unified View module - ENHANCED VERSION"""
-    st.header("📊 Unified View Generator")
-    st.caption("Transform three-way matches into hourly ML-ready dataset")
-    
-    processor = UnifiedViewProcessor()
-    
-    # Get processing status
-    status_df = processor.get_processing_status()
-    
-    if status_df.empty:
-        st.warning("No ETL data found. Please process data in ETL Pipeline first.")
-        return
-    
-    # Show current status
-    st.markdown("### 📈 Processing Status")
-    
-    # Add color coding for status
-    def color_status(row):
-        if row['unified_processed']:
-            return ['background-color: lightgreen'] * len(row)
-        else:
-            return ['background-color: lightyellow'] * len(row)
-    
-    styled_df = status_df.style.apply(color_status, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
-    
-    # Process unprocessed months
-    unprocessed = status_df[~status_df['unified_processed']]
-    if not unprocessed.empty:
-        st.info(f"📌 {len(unprocessed)} month(s) ready for unified view processing")
-        
-        if st.button("🚀 Process All Unprocessed Months", type="primary"):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for counter, (idx, row) in enumerate(unprocessed.iterrows()):
-                month = row['month']
-                status_text.text(f"Processing {month}...")
-                
-                with st.spinner(f"Creating unified view for {month}..."):
-                    result = processor.process_month(month, force_reprocess=False)
-                    
-                    if result['status'] == 'success':
-                        st.success(f"✅ {month}: Created {result['records_created']} hourly records from {result['machines_processed']} machines")
-                    elif result['status'] == 'exists':
-                        st.info(f"ℹ️ {month}: {result.get('message', 'Already processed')}")
-                    elif result['status'] == 'missing_files':
-                        st.warning(f"⚠️ {month}: Data files missing - Please re-upload through ETL Pipeline")
-                    elif result['status'] == 'no_data':
-                        st.info(f"ℹ️ {month}: No data available - Upload through ETL Pipeline first")
-                    else:
-                        st.error(f"❌ {month}: {result.get('message', 'Unknown error')}")
-                
-                progress_bar.progress((counter + 1) / len(unprocessed))
-            
-            status_text.text("Processing complete!")
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Month selector for viewing data
-    st.markdown("### 🔍 View Unified Data")
-    
-    # Import the utility to get months from actual datetime data
-    import sys
-    import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'core'))
-    from data_utils import get_available_months_from_data
-    
-    conn = sqlite3.connect(processor.db_path)
-    # Use the new function that derives months from actual datetime values
-    available_months = get_available_months_from_data(conn)
-    
-    if available_months.empty:
-        st.info("No unified view data available yet. Process some months first!")
-        conn.close()
-        return
-    
-    selected_month = st.selectbox(
-        "Select month to view",
-        available_months['month_year'].tolist()
-    )
-    
-    # Display data for selected month
-    if selected_month:
-        # Get total count from database
-        count_query = "SELECT COUNT(*) as total FROM unified_view WHERE month_year = ?"
-        total_records = pd.read_sql_query(count_query, conn, params=(selected_month,)).iloc[0]['total']
-        
-        # Load limited data for display (performance)
-        display_query = """
-            SELECT * FROM unified_view 
-            WHERE month_year = ?
-            ORDER BY datetime, machine_id
-            LIMIT 1000
-        """
-        df = pd.read_sql_query(display_query, conn, params=(selected_month,))
-        
-        # Get machines with significant activity
-        machine_activity_query = """
-            SELECT machine_id, COUNT(*) as hours_active
-            FROM unified_view
-            WHERE month_year = ?
-            GROUP BY machine_id
-        """
-        machine_activity = pd.read_sql_query(machine_activity_query, conn, params=(selected_month,))
-        
-        # Machines with >100 hours are considered truly active
-        active_machines = len(machine_activity[machine_activity['hours_active'] > 100])
-        
-        # Machines with <=100 hours are essentially idle
-        idle_machines = len(machine_activity[machine_activity['hours_active'] <= 100])
-        
-        # Show summary statistics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if total_records > 1000:
-                st.metric("Total Records", f"{total_records:,}")
-            else:
-                st.metric("Total Records", f"{total_records:,}")
-        
-        with col2:
-            st.metric("Active Machines", active_machines)
-        
-        with col3:
-            st.metric("Idle Machines", idle_machines)
-        
-        with col4:
-            avg_efficiency = df['kwh_per_unit'].mean()
-            st.metric("Avg Efficiency", f"{avg_efficiency:.2f} kWh/unit" if pd.notna(avg_efficiency) else "N/A")
-        
-        # ENHANCED: Add machine utilization analysis
-        if st.button("🔍 Analyze Machine Utilization"):
-            with st.spinner("Analyzing machine activity patterns..."):
-                summary, machine_df = processor.analyze_machine_activity(selected_month)
-                
-                if summary:
-                    st.success("✅ Analysis complete!")
-                    
-                    # Show utilization distribution
-                    st.subheader("Machine Utilization Distribution")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Average Utilization", f"{summary['avg_utilization']:.1f}%")
-                        st.caption("Target: >60% for active machines")
-                    
-                    with col2:
-                        active_pct = (summary['active_machines'] / summary['total_machines'] * 100)
-                        st.metric("Active Machine Rate", f"{active_pct:.1f}%")
-                        st.caption(f"{summary['active_machines']} of {summary['total_machines']} machines")
-                    
-                    # Show machine details
-                    if not machine_df.empty:
-                        st.dataframe(
-                            machine_df[['machine_id', 'status', 'active_hours', 'utilization_rate', 'total_production']].round(2),
-                            use_container_width=True
-                        )
-        
-        # Show feature completeness
-        st.markdown("#### 📊 Feature Completeness")
-        
-        key_features = [
-            'energy_kwh', 'production_qty', 'kwh_per_unit', 
-            'team_composition', 'material_code', 'task_type'
-        ]
-        
-        completeness = []
-        for feature in key_features:
-            if feature in df.columns:
-                non_null_pct = (df[feature].notna().sum() / len(df) * 100)
-                completeness.append({
-                    'Feature': feature,
-                    'Completeness': f"{non_null_pct:.1f}%",
-                    'Status': '🟢' if non_null_pct >= 80 else '🟡' if non_null_pct >= 50 else '🔴'
-                })
-        
-        comp_df = pd.DataFrame(completeness)
-        st.dataframe(comp_df, use_container_width=True, hide_index=True)
-        
-        # Show sample data
-        if total_records > 1000:
-            st.markdown(f"#### 📋 Sample Data (First 100 of {total_records:,} Records)")
-            st.info(f"ℹ️ Displaying limited data for performance. Full dataset ({total_records:,} records) available in exports.")
-        else:
-            st.markdown("#### 📋 Sample Data (First 100 Records)")
-        
-        display_cols = [
-            'datetime', 'machine_id', 'energy_kwh', 'production_qty',
-            'kwh_per_unit', 'team_composition', 'material_code', 'task_type'
-        ]
-        available_cols = [col for col in display_cols if col in df.columns]
-        
-        st.dataframe(
-            df[available_cols].head(100).round(2),
-            use_container_width=True
+    """Main UI for canonical month-scoped Gold analytics."""
+    st.header("📊 Canonical Unified Analytics")
+    st.caption("Canonical Gold source: `fact_machine_hour`")
+
+    reader = CanonicalGoldReader()
+
+    if not reader.fact_machine_hour_exists():
+        st.warning(
+            "Canonical Gold table `fact_machine_hour` is not available. "
+            "This page no longer falls back to legacy `unified_view` or synthetic/demo rows."
         )
-        
-        # Download options
-        st.markdown("#### 💾 Export Data")
-        
-        # Load full data for export (only when needed)
-        @st.cache_data
-        def load_full_data(month):
-            """Load complete dataset for export"""
-            full_query = """
-                SELECT * FROM unified_view 
-                WHERE month_year = ?
-                ORDER BY datetime, machine_id
+        return
+
+    available_months = reader.get_available_months()
+    if not available_months:
+        st.warning(
+            "No canonical Gold rows are available yet in `fact_machine_hour`. "
+            "This page no longer falls back to legacy `unified_view` or synthetic/demo rows."
+        )
+        return
+
+    selected_month = st.selectbox("Select month to view", available_months)
+
+    try:
+        df = reader.read_month_page_dataframe(selected_month)
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+
+    if df.empty:
+        st.warning(
+            f"No canonical Gold rows are available for {selected_month}. "
+            "This page does not run legacy unified-view processing as a fallback."
+        )
+        return
+
+    metrics = reader.build_month_metrics(df)
+    state_summary = reader.build_state_summary(df)
+    export_df = reader.build_export_dataframe(df)
+
+    quality_metrics = _build_unified_quality_metrics(df)
+    unknown_breakdown = _build_unified_unknown_breakdown(df)
+    _render_unified_status_chips(
+        total_rows=metrics["gold_rows_loaded_for_page"],
+        unknown_ratio=quality_metrics["unknown_or_unattributed_ratio"],
+        maintenance_mode_ready=df["maintenance_minutes"].notna().sum() > 0,
+        confidence_values=df["state_confidence"],
+    )
+
+    st.markdown("### 🔍 Canonical Gold Month View")
+    st.caption(
+        "Displayed energy-intensity KPI = sum(energy_total_kwh) / sum(good_qty) on "
+        "positive-good-qty canonical rows in the selected month."
+    )
+
+    month_cards = _build_unified_month_cards(metrics)
+    first_row = st.columns(3)
+    second_row = st.columns(3)
+    for column, card in zip(first_row, month_cards[:3]):
+        with column:
+            _render_unified_value_card(card)
+    for column, card in zip(second_row, month_cards[3:]):
+        with column:
+            _render_unified_value_card(card)
+
+    st.markdown("#### 🛡️ Coverage & Confidence Audit")
+    st.caption("These are current-month composition checks only. They are not month-over-month trend indicators.")
+    audit_cards = _build_unified_audit_cards(
+        quality_metrics,
+        total_rows=metrics["gold_rows_loaded_for_page"],
+    )
+    audit_columns = st.columns(3)
+    for column, card in zip(audit_columns, audit_cards):
+        with column:
+            _render_unified_audit_card(card)
+
+    breakdown_display_df = unknown_breakdown.copy()
+    breakdown_display_df["Share of Month"] = breakdown_display_df["ratio"].apply(_format_ratio)
+    breakdown_display_df = breakdown_display_df.drop(columns=["ratio"])
+    st.dataframe(
+        breakdown_display_df.rename(
+            columns={
+                "category": "Unknown / Unattributed Category",
+                "meaning": "Meaning",
+                "row_count": "Canonical Machine-Hour Rows",
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    st.markdown("#### 📊 Machine State Summary")
+    st.caption(
+        "Primary chart answers the business question directly: where the month's energy went by canonical machine state. "
+        "Row composition remains available below as a secondary audit view only."
+    )
+    state_energy_chart_df = _build_unified_state_energy_chart_data(state_summary)
+    if state_energy_chart_df.empty:
+        st.info("No positive state energy is available for the selected month.")
+    else:
+        summary_chart = px.bar(
+            state_energy_chart_df,
+            x="energy_kwh",
+            y="state_label",
+            orientation="h",
+            labels={"state_label": "Machine State", "energy_kwh": "Energy (kWh)"},
+            title=f"Energy by State (kWh) for {selected_month}",
+        )
+        st.plotly_chart(summary_chart, use_container_width=True)
+    st.dataframe(
+        state_summary.assign(
+            energy_kwh=state_summary["energy_kwh"].round(2),
+            energy_share=state_summary["energy_share"].apply(_format_ratio),
+        ).rename(
+            columns={
+                "row_count": "Canonical Machine-Hour Rows",
+                "energy_kwh": "Energy (kWh)",
+                "energy_share": "Share of Month Energy",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+    with st.expander("Secondary view: canonical row composition by state", expanded=False):
+        st.caption(
+            "This chart is row composition only. It counts canonical machine-hour rows and does not imply energy share."
+        )
+        state_row_chart_df = _build_unified_state_row_chart_data(state_summary)
+        row_chart = px.bar(
+            state_row_chart_df,
+            x="row_count",
+            y="state_label",
+            orientation="h",
+            labels={"state_label": "Machine State", "row_count": "Canonical Machine-Hour Rows"},
+            title=f"Canonical Machine-Hour Row Composition by State for {selected_month}",
+        )
+        st.plotly_chart(row_chart, use_container_width=True)
+        st.dataframe(
+            state_summary.rename(columns={"row_count": "Canonical Machine-Hour Rows"})[
+                ["state_label", "Canonical Machine-Hour Rows"]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with st.expander("📋 Audit Sample Rows", expanded=False):
+        st.caption(
+            "Samples are drawn from the canonical month slice and can be switched between first rows, "
+            "random rows, unknown rows, maintenance rows, and anomalous rows."
+        )
+        sample_mode = st.radio(
+            "Sample mode",
+            [
+                "First rows",
+                "Random",
+                "Unknown / Unattributed",
+                "Maintenance rows",
+                "Anomalous rows",
+            ],
+            horizontal=True,
+        )
+        sample_size = st.select_slider("Sample size", options=[25, 50, 100], value=50)
+        sample_df = _select_unified_audit_sample(df, sample_mode, sample_size)
+        if sample_df.empty:
+            st.info("No canonical rows match the selected audit sample mode.")
+        else:
+            numeric_sample_columns = sample_df.select_dtypes(include=[np.number]).columns
+            if len(numeric_sample_columns) > 0:
+                sample_df[numeric_sample_columns] = sample_df[numeric_sample_columns].round(4)
+            st.dataframe(sample_df[CANONICAL_GOLD_SAMPLE_COLUMNS], use_container_width=True)
+
+    st.markdown("#### 💾 Export Canonical Data")
+    csv_data = export_df.to_csv(index=False).encode("utf-8-sig")
+
+    from io import BytesIO
+
+    excel_output = BytesIO()
+    with pd.ExcelWriter(excel_output, engine="openpyxl") as writer:
+        export_df.to_excel(writer, sheet_name="Canonical Gold", index=False)
+        state_summary.to_excel(writer, sheet_name="State Summary", index=False)
+
+    export_col1, export_col2 = st.columns(2)
+    with export_col1:
+        st.download_button(
+            label=f"📥 Download CSV ({len(export_df):,} rows)",
+            data=csv_data,
+            file_name=f"canonical_gold_{selected_month.replace(' ', '_')}.csv",
+            mime="text/csv",
+        )
+    with export_col2:
+        st.download_button(
+            label=f"📥 Download Excel ({len(export_df):,} rows)",
+            data=excel_output.getvalue(),
+            file_name=f"canonical_gold_{selected_month.replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    with st.expander("📝 Canonical Page Notes"):
+        st.markdown(
             """
-            return pd.read_sql_query(full_query, sqlite3.connect('manufacturing_data.db'), params=(month,))
-        
-        # Initialize session state for exports
-        if 'csv_data' not in st.session_state:
-            st.session_state.csv_data = None
-        if 'excel_data' not in st.session_state:
-            st.session_state.excel_data = None
-        if 'export_month' not in st.session_state:
-            st.session_state.export_month = None
-            
-        # Reset if month changed
-        if st.session_state.export_month != selected_month:
-            st.session_state.csv_data = None
-            st.session_state.excel_data = None
-            st.session_state.export_month = selected_month
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # CSV download
-            if st.button("📥 Prepare CSV Download", key="csv_prep"):
-                with st.spinner(f"Loading {total_records:,} records for CSV export..."):
-                    df_full = load_full_data(selected_month)
-                    st.session_state.csv_data = df_full.to_csv(index=False)
-                st.success(f"✅ CSV ready with {total_records:,} records")
-            
-            # Show download button if data is ready
-            if st.session_state.csv_data:
-                st.download_button(
-                    label=f"📥 Download CSV ({total_records:,} records)",
-                    data=st.session_state.csv_data,
-                    file_name=f"unified_view_{selected_month.replace(' ', '_')}.csv",
-                    mime="text/csv",
-                    key="csv_download"
-                )
-        
-        with col2:
-            # Excel download
-            if st.button("📥 Prepare Excel Download", key="excel_prep"):
-                with st.spinner(f"Loading {total_records:,} records for Excel export..."):
-                    from io import BytesIO
-                    df_full = load_full_data(selected_month)
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        df_full.to_excel(writer, sheet_name='Unified View', index=False)
-                        
-                        # ENHANCED calculation explanations sheet
-                        calculations_df = pd.DataFrame([
-                            {
-                                'Metric': 'kwh_per_unit',
-                                'Formula': 'energy_kwh / production_qty',
-                                'Description': 'Energy efficiency per unit produced',
-                                'Typical Range': '0.5 - 2.0 kWh/unit',
-                                'Optimization Target': '< 1.0 kWh/unit'
-                            },
-                            {
-                                'Metric': 'production_allocation',
-                                'Formula': '(hour_overlap / total_duration) * total_production',
-                                'Description': 'Proportional allocation across hours',
-                                'Validation': '92.1% accuracy vs actual',
-                                'Alternative': 'Use actual_speed when available'
-                            },
-                            {
-                                'Metric': 'idle_energy_waste',
-                                'Formula': 'energy_kwh when production_qty = 0',
-                                'Description': 'Wasted energy during idle time',
-                                'Current Average': '45% of total energy',
-                                'Target': '< 20% of total energy'
-                            },
-                            {
-                                'Metric': 'material_transition',
-                                'Formula': 'Compare consecutive material_codes',
-                                'Description': 'Detect material changeovers',
-                                'Impact': 'Triggers setup time and energy',
-                                'Optimization': 'Minimize transitions via scheduling'
-                            },
-                            {
-                                'Metric': 'team_synergy',
-                                'Formula': 'Performance variance by team composition',
-                                'Description': 'Team effectiveness measurement',
-                                'Finding': 'Teams matter more than individuals',
-                                'Application': 'Optimize team assignments'
-                            }
-                        ])
-                        calculations_df.to_excel(writer, sheet_name='Calculations', index=False)
-                    st.session_state.excel_data = output.getvalue()
-                st.success(f"✅ Excel ready with {total_records:,} records")
-            
-            # Show download button if data is ready
-            if st.session_state.excel_data:
-                st.download_button(
-                    label=f"📥 Download Excel ({total_records:,} records)",
-                    data=st.session_state.excel_data,
-                    file_name=f"unified_view_{selected_month.replace(' ', '_')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="excel_download"
-                )
-    
-    conn.close()
-    
-    # Show calculation documentation
-    with st.expander("📝 Calculation Methods Documentation"):
-        st.markdown("""
-        ### How We Calculate Key Metrics
-        
-        **1. Hourly Production Allocation**
-        - Formula: `(hour_overlap_duration / total_production_duration) × total_production_quantity`
-        - Enhanced: Uses `actual_speed × hour_duration` when speed data available
-        - Example: If production runs 7:30-10:15 (165 min) with 1000 units:
-          - 7:00-8:00: (30/165) × 1000 = 182 units
-          - 8:00-9:00: (60/165) × 1000 = 364 units
-          - 9:00-10:00: (60/165) × 1000 = 364 units
-          - 10:00-11:00: (15/165) × 1000 = 91 units
-        
-        **2. Energy Attribution (ENHANCED)**
-        - Setup Energy: Energy consumed during preparation time (準備開始時間 to 準備結束時間)
-        - Production Energy: Energy consumed during actual production (~48%)
-        - Idle Energy: Energy consumed when machine is on but not producing - WASTE (~45%)
-        - Maintenance Energy: Energy consumed during 日保養/周保養/月保養/計劃保養 - NECESSARY (~7%)
-        - **NEW**: Attribution validation ensures sum equals total energy
-        
-        **3. Energy Efficiency (kWh/unit)**
-        - Formula: `total_energy_kwh / production_quantity`
-        - Lower values indicate better efficiency
-        - Used for machine comparison and optimization
-        
-        **4. Team Composition**
-        - Extracted from CSI: 機長姓名1 + 機組人員姓名1-4
-        - Team size = 1 (leader) + number of members
-        - Used for performance analysis by team
-        
-        **5. Material Transitions (ENHANCED)**
-        - Detected by comparing consecutive records
-        - Flag = 1 when material changes between hours
-        - **NEW**: Transition energy cost tracked
-        - Used to identify setup/changeover patterns
-        
-        **6. Machine Utilization (NEW)**
-        - Active: ≥100 hours/month of operation
-        - Idle: <100 hours/month of operation
-        - Utilization Rate: (active_hours / 720) × 100%
-        
-        **Data Quality Guarantees:**
-        - ✅ All calculations logged in database audit table
-        - ✅ Sample calculations stored for verification
-        - ✅ Negative values prevented
-        - ✅ Division by zero handled with NaN
-        - ✅ Time overlaps calculated precisely to the second
-        - ✅ Energy attribution validated to sum correctly
-        """)
+            - This page is month-scoped and reads `fact_machine_hour` only.
+            - `production_qty` is the canonical `good_qty` projection for this page.
+            - `kwh_per_good_unit` is only calculated when `good_qty > 0`.
+            - `maintenance_in_hour` is derived conservatively from Gold `source_flags` or `machine_state = maintenance`.
+            - Legacy `unified_view` generation and synthetic/demo fallback are deliberately not used here.
+            """
+        )
 
 
 # Function to auto-trigger from ETL
-def auto_process_after_etl(month_year: str):
-    """
-    Called automatically after ETL completes
-    This ensures unified view is always created after new ETL data
-    """
-    processor = UnifiedViewProcessor()
-    result = processor.process_month(month_year, force_reprocess=True)
-    return result
+def auto_process_after_etl(month_year: str, db_path=None):
+    """Compatibility wrapper that now routes post-ETL processing to canonical materialization."""
+    try:
+        materializer = CanonicalMaterializer(db_path=db_path)
+        result = materializer.materialize_month(month_year)
+        return result
+    except Exception as exc:
+        return {
+            "status": "error",
+            "target_month": month_year,
+            "silver_materialized": False,
+            "gold_materialized": False,
+            "message": str(exc),
+            "legacy_unified_view_bypassed": True,
+        }
+
+def _build_unified_quality_metrics(page_df: pd.DataFrame) -> dict[str, float | int]:
+    total_rows = int(len(page_df))
+    machine_state = page_df["machine_state"].fillna("").astype(str).str.strip().str.lower()
+    unknown_mask = page_df["state_bucket"].eq("unknown") | machine_state.eq("energy_only")
+    positive_good_mask = page_df["good_qty"].fillna(0.0) > 0
+    maintenance_mask = page_df["maintenance_in_hour"].fillna(0).astype(int) == 1
+    return {
+        "unknown_or_unattributed_rows": int(unknown_mask.sum()),
+        "unknown_or_unattributed_ratio": float(unknown_mask.mean()) if total_rows else 0.0,
+        "positive_good_rows": int(positive_good_mask.sum()),
+        "positive_good_ratio": float(positive_good_mask.mean()) if total_rows else 0.0,
+        "maintenance_flag_rows": int(maintenance_mask.sum()),
+        "maintenance_flag_ratio": float(maintenance_mask.mean()) if total_rows else 0.0,
+    }
+
+
+def _build_unified_month_cards(metrics: dict[str, float | int | None]) -> list[dict[str, str]]:
+    return [
+        _build_unified_value_card_payload(
+            "Total Energy",
+            metrics.get("total_energy_total_kwh"),
+            unit="kWh",
+            full_decimals=1,
+        ),
+        _build_unified_value_card_payload(
+            "Total Good Qty",
+            metrics.get("total_good_qty"),
+            unit="pcs",
+            full_decimals=1,
+        ),
+        _build_unified_value_card_payload(
+            "Weighted kWh / Good Unit",
+            metrics.get("weighted_kwh_per_good_unit"),
+            unit="kWh / good unit",
+            compact=False,
+            primary_decimals=4,
+            full_decimals=6,
+        ),
+        _build_unified_value_card_payload(
+            "Canonical Machine-Hour Rows",
+            metrics.get("gold_rows_loaded_for_page"),
+            unit="rows",
+            full_decimals=0,
+        ),
+        _build_unified_value_card_payload(
+            "Distinct Machines",
+            metrics.get("distinct_machines"),
+            unit="machines",
+            full_decimals=0,
+        ),
+        _build_unified_value_card_payload(
+            "Total Scrap Qty",
+            metrics.get("total_scrap_qty"),
+            unit="pcs",
+            full_decimals=1,
+        ),
+    ]
+
+
+def _build_unified_value_card_payload(
+    label: str,
+    value: float | int | None,
+    *,
+    unit: str = "",
+    compact: bool = True,
+    primary_decimals: int = 2,
+    full_decimals: int = 1,
+) -> dict[str, str]:
+    primary_text, secondary_text = _format_unified_measure(
+        value,
+        unit=unit,
+        compact=compact,
+        primary_decimals=primary_decimals,
+        full_decimals=full_decimals,
+    )
+    return {
+        "label": label,
+        "primary": primary_text,
+        "secondary": secondary_text,
+    }
+
+
+def _build_unified_audit_cards(
+    quality_metrics: dict[str, float | int],
+    *,
+    total_rows: int,
+) -> list[dict[str, str]]:
+    return [
+        {
+            "label": "Unknown / Unattributed",
+            "primary": _format_ratio(quality_metrics["unknown_or_unattributed_ratio"]),
+            "secondary": (
+                f"{quality_metrics['unknown_or_unattributed_rows']:,} / {total_rows:,} rows"
+            ),
+            "description": "Rows whose current state is unknown or only energy-backed without a clearer canonical attribution.",
+        },
+        {
+            "label": "Positive-Good Coverage",
+            "primary": _format_ratio(quality_metrics["positive_good_ratio"]),
+            "secondary": f"{quality_metrics['positive_good_rows']:,} / {total_rows:,} rows",
+            "description": "Rows with `good_qty > 0`; this is the denominator slice that supports the weighted efficiency KPI.",
+        },
+        {
+            "label": "Maintenance-Flag Coverage",
+            "primary": _format_ratio(quality_metrics["maintenance_flag_ratio"]),
+            "secondary": f"{quality_metrics['maintenance_flag_rows']:,} / {total_rows:,} rows",
+            "description": "Rows flagged by maintenance source evidence or by a canonical `maintenance` machine state.",
+        },
+    ]
+
+
+def _build_unified_unknown_breakdown(page_df: pd.DataFrame) -> pd.DataFrame:
+    if page_df.empty:
+        return pd.DataFrame(columns=["category", "meaning", "row_count", "ratio"])
+
+    machine_state = page_df["machine_state"].fillna("").astype(str).str.strip().str.lower()
+    null_source_mask = machine_state.eq("")
+    energy_only_mask = machine_state.eq("energy_only")
+    derived_unknown_mask = page_df["state_bucket"].eq("unknown") & ~null_source_mask & ~energy_only_mask
+    total_rows = len(page_df)
+    rows = [
+        (
+            "Null Source State",
+            "The persisted `machine_state` field is blank/null on the canonical row.",
+            int(null_source_mask.sum()),
+        ),
+        (
+            "Derived Unknown",
+            "A non-null state value was present but still normalised to the catch-all `unknown` bucket.",
+            int(derived_unknown_mask.sum()),
+        ),
+        (
+            "Energy-Only Unattributed",
+            "Energy landed in the month slice without enough CSI/MES context to attribute a clearer operating state.",
+            int(energy_only_mask.sum()),
+        ),
+    ]
+    return pd.DataFrame(
+        [
+            {
+                "category": label,
+                "meaning": meaning,
+                "row_count": row_count,
+                "ratio": (row_count / total_rows) if total_rows else 0.0,
+            }
+            for label, meaning, row_count in rows
+        ]
+    )
+
+
+def _build_unified_state_energy_chart_data(state_summary: pd.DataFrame) -> pd.DataFrame:
+    if state_summary.empty:
+        return pd.DataFrame(columns=["state_label", "energy_kwh"])
+
+    chart_df = state_summary.copy()
+    chart_df = chart_df[chart_df["energy_kwh"].fillna(0.0) > 0].copy()
+    if chart_df.empty:
+        return pd.DataFrame(columns=["state_label", "energy_kwh"])
+
+    return chart_df.sort_values(["energy_kwh", "state_label"], ascending=[True, True]).reset_index(drop=True)
+
+
+def _build_unified_state_row_chart_data(state_summary: pd.DataFrame) -> pd.DataFrame:
+    if state_summary.empty:
+        return pd.DataFrame(columns=["state_label", "row_count"])
+
+    return state_summary.sort_values(["row_count", "state_label"], ascending=[True, True]).reset_index(drop=True)
+
+
+def _select_unified_audit_sample(
+    page_df: pd.DataFrame,
+    sample_mode: str,
+    sample_size: int,
+) -> pd.DataFrame:
+    if page_df.empty:
+        return page_df.copy()
+
+    working_df = page_df.copy()
+    machine_state = working_df["machine_state"].fillna("").astype(str).str.strip().str.lower()
+    sample_mode_map = {
+        "First rows": lambda frame: frame.sort_values(["datetime", "machine_id"]).head(sample_size),
+        "Random": lambda frame: frame.sample(n=min(sample_size, len(frame)), random_state=42),
+        "Unknown / Unattributed": lambda frame: frame[
+            frame["state_bucket"].eq("unknown") | machine_state.eq("energy_only")
+        ].sort_values(["datetime", "machine_id"]).head(sample_size),
+        "Maintenance rows": lambda frame: frame[
+            frame["maintenance_in_hour"].fillna(0).astype(int) == 1
+        ].sort_values(["datetime", "machine_id"]).head(sample_size),
+        "Anomalous rows": lambda frame: _select_unified_anomalous_rows(frame, sample_size),
+    }
+    return sample_mode_map.get(sample_mode, sample_mode_map["First rows"])(working_df).reset_index(
+        drop=True
+    )
+
+
+def _select_unified_anomalous_rows(page_df: pd.DataFrame, sample_size: int) -> pd.DataFrame:
+    anomaly_df = page_df[
+        page_df["kwh_per_good_unit"].notna() & (page_df["kwh_per_good_unit"] > 0)
+    ].copy()
+    if anomaly_df.empty:
+        return page_df.head(sample_size).copy()
+
+    threshold = anomaly_df["kwh_per_good_unit"].quantile(0.95)
+    anomaly_df = anomaly_df[anomaly_df["kwh_per_good_unit"] >= threshold].copy()
+    if anomaly_df.empty:
+        anomaly_df = page_df[
+            page_df["kwh_per_good_unit"].notna() & (page_df["kwh_per_good_unit"] > 0)
+        ].copy()
+    return anomaly_df.sort_values(
+        ["kwh_per_good_unit", "energy_total_kwh"],
+        ascending=[False, False],
+    ).head(sample_size)
+
+
+def _render_unified_status_chips(
+    *,
+    total_rows: int,
+    unknown_ratio: float,
+    maintenance_mode_ready: bool,
+    confidence_values: pd.Series,
+) -> None:
+    confidence_labels = sorted(
+        {
+            value
+            for value in confidence_values.dropna().astype(str).str.strip().tolist()
+            if value
+        }
+    )
+    confidence_summary = ", ".join(confidence_labels) if confidence_labels else "n/a"
+    chips = [
+        ("Source", "fact_machine_hour"),
+        ("Month Rows", f"{total_rows:,}"),
+        ("Unknown Rows", _format_ratio(unknown_ratio)),
+        ("Maintenance Minutes", "Modeled" if maintenance_mode_ready else "Not modeled"),
+        ("State Confidence", confidence_summary),
+    ]
+    html = "".join(
+        [
+            (
+                "<span style='display:inline-block;padding:0.25rem 0.65rem;margin:0 0.5rem 0.5rem 0;"
+                "border-radius:999px;background:#eef2ff;color:#1f2937;font-size:0.85rem;'>"
+                f"<strong>{label}:</strong> {value}</span>"
+            )
+            for label, value in chips
+        ]
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def _render_unified_value_card(card: dict[str, str]) -> None:
+    st.markdown(
+        f"""
+        <div style="
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 1rem 1rem 0.9rem 1rem;
+            background: #ffffff;
+            min-height: 148px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+        ">
+            <div style="font-size: 0.88rem; font-weight: 600; color: #475569;">
+                {html.escape(card['label'])}
+            </div>
+            <div style="margin-top: 0.45rem; font-size: 2rem; line-height: 1.15; font-weight: 700; color: #0f172a;">
+                {html.escape(card['primary'])}
+            </div>
+            <div style="margin-top: 0.6rem; font-size: 0.82rem; color: #64748b;">
+                {html.escape(card['secondary'])}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_unified_audit_card(card: dict[str, str]) -> None:
+    st.markdown(
+        f"""
+        <div style="
+            border: 1px solid #dbe4f0;
+            border-radius: 16px;
+            padding: 1rem 1rem 0.95rem 1rem;
+            background: #f8fafc;
+            min-height: 172px;
+        ">
+            <div style="font-size: 0.88rem; font-weight: 600; color: #475569;">
+                {html.escape(card['label'])}
+            </div>
+            <div style="margin-top: 0.45rem; font-size: 1.85rem; line-height: 1.15; font-weight: 700; color: #0f172a;">
+                {html.escape(card['primary'])}
+            </div>
+            <div style="margin-top: 0.55rem; font-size: 0.84rem; font-weight: 600; color: #334155;">
+                {html.escape(card['secondary'])}
+            </div>
+            <div style="margin-top: 0.55rem; font-size: 0.8rem; color: #64748b;">
+                {html.escape(card['description'])}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _format_unified_measure(
+    value: float | int | None,
+    *,
+    unit: str = "",
+    compact: bool = True,
+    primary_decimals: int = 2,
+    full_decimals: int = 1,
+) -> tuple[str, str]:
+    if value is None or pd.isna(value):
+        return "N/A", "Full value unavailable."
+
+    numeric_value = float(value)
+    unit_suffix = f" {unit}".rstrip()
+
+    if compact:
+        compact_value = _format_unified_compact_number(
+            numeric_value,
+            decimals=primary_decimals,
+        )
+        primary_text = f"{compact_value}{unit_suffix}"
+    else:
+        primary_text = f"{numeric_value:,.{primary_decimals}f}{unit_suffix}"
+
+    if full_decimals == 0:
+        full_value = f"{int(round(numeric_value)):,}"
+    else:
+        full_value = f"{numeric_value:,.{full_decimals}f}"
+    secondary_text = f"Full value: {full_value}{unit_suffix}"
+    return primary_text, secondary_text
+
+
+def _format_unified_compact_number(value: float, *, decimals: int = 2) -> str:
+    abs_value = abs(value)
+    suffix = ""
+    scaled_value = value
+    if abs_value >= 1_000_000_000:
+        scaled_value = value / 1_000_000_000
+        suffix = "B"
+    elif abs_value >= 1_000_000:
+        scaled_value = value / 1_000_000
+        suffix = "M"
+    elif abs_value >= 1_000:
+        scaled_value = value / 1_000
+        suffix = "K"
+
+    if suffix:
+        return f"{scaled_value:,.{decimals}f}{suffix}"
+    if value.is_integer():
+        return f"{int(value):,}"
+    return f"{value:,.{decimals}f}"
+
+
+def _format_ratio(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{float(value) * 100:.1f}%"
 
 
 if __name__ == "__main__":

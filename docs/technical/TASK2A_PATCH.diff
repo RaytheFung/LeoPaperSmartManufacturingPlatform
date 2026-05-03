@@ -1,0 +1,396 @@
+# Task 2A patch archive
+# Date: 2026-03-22
+#
+# Notes:
+# - `git diff` was not available because this directory is not a Git working tree.
+# - This file preserves the Task 2A edits in apply_patch-style patch form.
+
+*** Begin Patch
+*** Add File: core/runtime_paths.py
++from __future__ import annotations
++
++from pathlib import Path
++
++
++_REPO_ROOT = Path(__file__).resolve().parents[1]
++_RAW_DATASET_ROOT_NAME = "2025 DataSet(JAN to JUN)"
++
++
++def get_repo_root() -> Path:
++    return _REPO_ROOT
++
++
++def get_database_path() -> Path:
++    return _REPO_ROOT / "manufacturing_data.db"
++
++
++def get_data_dir() -> Path:
++    return _REPO_ROOT / "data"
++
++
++def get_models_dir() -> Path:
++    return _REPO_ROOT / "models"
++
++
++def get_etl_outputs_dir() -> Path:
++    return _REPO_ROOT / "etl_outputs"
++
++
++def get_raw_dataset_root() -> Path:
++    return _REPO_ROOT / _RAW_DATASET_ROOT_NAME
++
++
++def resolve_dataset_subdir(data_root: Path | str | None, live_name: str, *legacy_names: str) -> Path:
++    root = Path(data_root) if data_root is not None else get_raw_dataset_root()
++    for folder_name in (live_name, *legacy_names):
++        candidate = root / folder_name
++        if candidate.exists():
++            return candidate
++    return root / live_name
++
++
++def get_energy_dataset_dir(data_root: Path | str | None = None) -> Path:
++    return resolve_dataset_subdir(
++        data_root,
++        "Energy Usage 1hr Interval",
++        "Energy Usage 1hr Interval(JAN to JUN)",
++    )
++
++
++def get_csi_dataset_dir(data_root: Path | str | None = None) -> Path:
++    return resolve_dataset_subdir(
++        data_root,
++        "CSI Monthly",
++        "CSI Monthly(JAN to JUN)",
++    )
++
++
++def get_mes_dataset_dir(data_root: Path | str | None = None) -> Path:
++    return resolve_dataset_subdir(
++        data_root,
++        "MES Monthly",
++        "MES Monthly(JAN to JUN)",
++    )
+*** Update File: app.py
+@@
+ import numpy as np
+ import os
+ 
+ # Import custom modules
+ from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
++from core.runtime_paths import get_data_dir
+ from core.utils import prepare_ml_data  # Use centralized ML data preparation
+ from modules.euvg_module import EnhancedUnifiedViewGenerator
+ from modules.etl_module import render_etl_page as render_etl_upload_page
+@@
+     try:
+         # Initialize ETL
+         etl = EnhancedSmartManufacturingETL()
++        data_dir = get_data_dir()
+         
+         # Define data paths
+-        energy_files = ['data/能耗、費用報表June(1-30).xlsx']
+-        csi_file = 'data/CSI印刷心電圖報表June.xlsx'
+-        mes_file = 'data/MES生產數據JunePrinter.xlsx'
+-        mappings_file = 'data/june_enhanced_manufacturing_mappings_LATEST.json'
++        energy_files = [str(data_dir / '能耗、費用報表June(1-30).xlsx')]
++        csi_file = str(data_dir / 'CSI印刷心電圖報表June.xlsx')
++        mes_file = str(data_dir / 'MES生產數據JunePrinter.xlsx')
++        mappings_file = data_dir / 'june_enhanced_manufacturing_mappings_LATEST.json'
+@@
+-        if os.path.exists(mappings_file):
+-            with open(mappings_file, 'r', encoding='utf-8') as f:
++        if mappings_file.exists():
++            with open(mappings_file, 'r', encoding='utf-8') as f:
+                 mappings_data = json.load(f)
+                 # EnhancedSmartManufacturingETL exposes machine_mapping as read-only property;
+                 # assign into internal state to preserve backwards compatibility.
+                 etl.state.machine_mapping = mappings_data
+*** Update File: modules/etl_module.py
+@@
+ import sqlite3
+ import json
+ from datetime import datetime
+ import os
+ from pathlib import Path
+ 
+-# Import the existing ETL solution
+-import sys
+-import os
+-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
++from core.runtime_paths import get_data_dir, get_database_path, get_repo_root
+ 
+ 
+ class ETLPipelineModule:
+-    def __init__(self, db_path='manufacturing_data.db'):
+-        self.db_path = db_path
++    def __init__(self, db_path=None):
++        self.db_path = str(db_path or get_database_path())
+         self.init_database()
+@@
+ def process_uploaded_files(energy_files, csi_file, mes_file, month_year, etl_module):
+     """Process the uploaded files using ETL pipeline"""
+     try:
+         with st.spinner(f"Processing {month_year} data..."):
+             # Save uploaded files to persistent data directory for unified view
+-            data_dir = Path("data")
+-            data_dir.mkdir(exist_ok=True)
++            data_dir = get_data_dir()
++            data_dir.mkdir(parents=True, exist_ok=True)
+@@
+             maintenance_file = None
++            repo_root = get_repo_root()
+             for pattern in maintenance_patterns:
+-                if os.path.exists(pattern):
+-                    maintenance_file = pattern
++                repo_path = repo_root / pattern
++                if repo_path.exists():
++                    maintenance_file = str(repo_path)
+                     break
+                 # Also check in data directory
+-                data_path = Path("data") / pattern
++                data_path = data_dir / pattern
+                 if data_path.exists():
+                     maintenance_file = str(data_path)
+                     break
+@@
+                             matched = len(maintenance_df[maintenance_df['is_three_way_match'] == 1])
+                             total = len(maintenance_df)
+                             
+                             # Save to database
+-                            conn = sqlite3.connect('manufacturing_data.db')
++                            conn = sqlite3.connect(etl_module.db_path)
+                             maintenance_df.to_sql('maintenance_records', conn, if_exists='append', index=False)
+*** Update File: modules/unified_view_module.py
+@@
+ import plotly.express as px
+ import plotly.graph_objects as go
+ 
+ # Import the EUVG components we need
+ from core.data_utils import get_available_months_from_data, get_month_year_from_datetime
++from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
++from core.runtime_paths import get_data_dir, get_database_path, get_etl_outputs_dir, get_repo_root
+ from modules.euvg_module import EnhancedUnifiedViewGenerator, EnergyAttributionSystem, TeamSynergyAnalyzer
+@@
+-    def __init__(self, db_path='manufacturing_data.db'):
+-        self.db_path = db_path
++    def __init__(self, db_path=None):
++        self.db_path = str(db_path or get_database_path())
+         self.init_database()
+@@
+-        search_dir = 'data'
++        search_dir = get_data_dir()
+         found_files = {'energy': [], 'csi': None, 'mes': None}
+         
+-        if os.path.exists(search_dir):
++        if search_dir.exists():
+             # Look for files with the exact naming pattern from ETL
+             # Energy files: {month_year}_energy_{number}.xlsx
+-            energy_pattern = os.path.join(search_dir, f"{month_prefix}_energy_*.xlsx")
++            energy_pattern = str(search_dir / f"{month_prefix}_energy_*.xlsx")
+             energy_files = glob.glob(energy_pattern)
+             found_files['energy'] = energy_files
+             
+             # CSI file: {month_year}_csi.xlsx
+-            csi_path = os.path.join(search_dir, f"{month_prefix}_csi.xlsx")
+-            if os.path.exists(csi_path):
+-                found_files['csi'] = csi_path
++            csi_path = search_dir / f"{month_prefix}_csi.xlsx"
++            if csi_path.exists():
++                found_files['csi'] = str(csi_path)
+             
+             # MES file: {month_year}_mes.xlsx
+-            mes_path = os.path.join(search_dir, f"{month_prefix}_mes.xlsx")
+-            if os.path.exists(mes_path):
+-                found_files['mes'] = mes_path
++            mes_path = search_dir / f"{month_prefix}_mes.xlsx"
++            if mes_path.exists():
++                found_files['mes'] = str(mes_path)
+@@
++            repo_root = get_repo_root()
+             for pattern in patterns:
+                 # Energy files (can be multiple)
+                 if not found_files['energy']:
+                     energy_patterns = [
+-                        f'*能耗*{pattern}*.xlsx',
+-                        f'*能耗*{pattern}*.xls',
+-                        f'*energy*{pattern}*.xlsx'
++                        str(repo_root / f'*能耗*{pattern}*.xlsx'),
++                        str(repo_root / f'*能耗*{pattern}*.xls'),
++                        str(repo_root / f'*energy*{pattern}*.xlsx')
+                     ]
+@@
+                 if not found_files['csi']:
+                     csi_patterns = [
+-                        f'*CSI*{pattern}*.xlsx',
+-                        f'*CSI*{pattern}*.xls',
+-                        f'*csi*{pattern}*.xlsx'
++                        str(repo_root / f'*CSI*{pattern}*.xlsx'),
++                        str(repo_root / f'*CSI*{pattern}*.xls'),
++                        str(repo_root / f'*csi*{pattern}*.xlsx')
+                     ]
+@@
+                 if not found_files['mes']:
+                     mes_patterns = [
+-                        f'*MES*{pattern}*.xlsx',
+-                        f'*MES*{pattern}*.xls',
+-                        f'*mes*{pattern}*.xlsx'
++                        str(repo_root / f'*MES*{pattern}*.xlsx'),
++                        str(repo_root / f'*MES*{pattern}*.xls'),
++                        str(repo_root / f'*mes*{pattern}*.xlsx')
+                     ]
+@@
+         if not files['energy'] or not files['csi'] or not files['mes']:
+-            # Check if we have ETL output files and can reconstruct from Excel reports
+-            import os
+-            
+             # Try to use ETL Excel output files as fallback
+-            etl_excel_path = f"etl_outputs/{month_year.lower().replace(' ', '_')}_etl_report.xlsx"
++            etl_outputs_dir = get_etl_outputs_dir()
++            etl_excel_path = etl_outputs_dir / f"{month_year.lower().replace(' ', '_')}_etl_report.xlsx"
+             
+-            if os.path.exists(etl_excel_path):
++            if etl_excel_path.exists():
+                 # Use the ETL report as a data source
+-                return self._process_from_etl_report(month_year, etl_excel_path)
++                return self._process_from_etl_report(month_year, str(etl_excel_path))
+@@
+             etl_json_patterns = [
+-                f"etl_outputs/{month_year.lower().replace(' ', '_')}_etl_report_mappings.json",
+-                f"etl_outputs/{month_year.lower().replace(' ', ' ')}_etl_report_mappings.json",
+-                f"etl_outputs/{month_year.split()[0].lower()}_{month_year.split()[1]}_etl_report_mappings.json"
++                etl_outputs_dir / f"{month_year.lower().replace(' ', '_')}_etl_report_mappings.json",
++                etl_outputs_dir / f"{month_year.lower().replace(' ', ' ')}_etl_report_mappings.json",
++                etl_outputs_dir / f"{month_year.split()[0].lower()}_{month_year.split()[1]}_etl_report_mappings.json"
+             ]
+             
+-            etl_exists = any(os.path.exists(f) for f in etl_json_patterns)
++            etl_exists = any(path.exists() for path in etl_json_patterns)
+@@
+-        # Initialize EUVG and load data
+-        import sys
+-        import os
+-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+-        from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
+-        
+         etl = EnhancedSmartManufacturingETL()
+         etl.extract_all_sources(files['energy'], files['csi'], files['mes'])
+@@
+-            return pd.read_sql_query(full_query, sqlite3.connect('manufacturing_data.db'), params=(month,))
++            return pd.read_sql_query(full_query, sqlite3.connect(processor.db_path), params=(month,))
+*** Update File: scripts/process_jan_to_june_2025.py
+@@
+ """
+ Manufacturing Data Processing Script for January to June 2025
+ Processes all monthly data files using the existing ETL pipeline in chronological order.
+ """
+ 
+-import os
+ import sys
+ import pandas as pd
+ import json
+ from pathlib import Path
+ from datetime import datetime
+ import sqlite3
+ 
+-# Add the parent directory to Python path to import local modules
+-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++REPO_ROOT = Path(__file__).resolve().parents[1]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
+ 
+-REPO_ROOT = Path(__file__).resolve().parents[1]
+-DEFAULT_DATA_ROOT = REPO_ROOT / "2025 DataSet(JAN to JUN)"
+-DEFAULT_OUTPUT_DIR = REPO_ROOT / "etl_outputs"
+-DEFAULT_SUMMARY_DIR = DEFAULT_OUTPUT_DIR / "summaries"
+-
+-# Import the existing ETL solution and module
+ from core.enhanced_etl_solution_CURRENT import EnhancedSmartManufacturingETL
++from core.runtime_paths import (
++    get_csi_dataset_dir,
++    get_energy_dataset_dir,
++    get_etl_outputs_dir,
++    get_raw_dataset_root,
++    get_repo_root,
++    get_database_path,
++    get_mes_dataset_dir,
++)
+ from modules.etl_module import ETLPipelineModule
++
++
++DEFAULT_DATA_ROOT = get_raw_dataset_root()
++DEFAULT_OUTPUT_DIR = get_etl_outputs_dir()
++DEFAULT_SUMMARY_DIR = DEFAULT_OUTPUT_DIR / "summaries"
+@@
+         """
+         self.data_root_path = Path(data_root_path)
+         self.output_dir = Path(output_dir)
+         self.summary_dir = Path(summary_dir)
+-        self.energy_dir = self.data_root_path / "Energy Usage 1hr Interval(JAN to JUN)"
+-        self.csi_dir = self.data_root_path / "CSI Monthly(JAN to JUN)"
+-        self.mes_dir = self.data_root_path / "MES Monthly(JAN to JUN)"
++        self.energy_dir = get_energy_dataset_dir(self.data_root_path)
++        self.csi_dir = get_csi_dataset_dir(self.data_root_path)
++        self.mes_dir = get_mes_dataset_dir(self.data_root_path)
+         self.output_dir.mkdir(parents=True, exist_ok=True)
+         self.summary_dir.mkdir(parents=True, exist_ok=True)
+@@
+-            print(f"   - Excel report: {report_filename.relative_to(REPO_ROOT)}")
+-            print(f"   - JSON mappings: {json_filename.relative_to(REPO_ROOT)}")
++            print(f"   - Excel report: {report_filename.relative_to(get_repo_root())}")
++            print(f"   - JSON mappings: {json_filename.relative_to(get_repo_root())}")
+@@
+-        print(f"\n📊 Processing summary saved to: {summary_filename.relative_to(REPO_ROOT)}")
++        print(f"\n📊 Processing summary saved to: {summary_filename.relative_to(get_repo_root())}")
+@@
+ def main():
+     """Main execution function"""
+     data_root_path = DEFAULT_DATA_ROOT
+@@
+     print("MANUFACTURING DATA PROCESSOR")
+     print("Processing January to June 2025 data")
+     print(f"Data source: {data_root_path}")
+     print(f"ETL outputs: {DEFAULT_OUTPUT_DIR}")
++    print(f"Database: {get_database_path()}")
+*** Update File: scripts/auto_ingest.py
+@@
+ import time
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Dict, Iterable, Tuple
+ 
+ 
+ REPO_ROOT = Path(__file__).resolve().parents[1]
+-DEFAULT_DATA_ROOT = REPO_ROOT / "2025 DataSet(JAN to JUN)"
+-DEFAULT_STATE_PATH = REPO_ROOT / "etl_outputs" / "auto_ingest_state.json"
+-
+-# Ensure local modules can be imported when this script is run directly
+ if str(REPO_ROOT) not in sys.path:
+-    sys.path.append(str(REPO_ROOT))
++    sys.path.insert(0, str(REPO_ROOT))
++
++from core.runtime_paths import (
++    get_csi_dataset_dir,
++    get_energy_dataset_dir,
++    get_etl_outputs_dir,
++    get_raw_dataset_root,
++    get_mes_dataset_dir,
++)
++
++
++DEFAULT_DATA_ROOT = get_raw_dataset_root()
++DEFAULT_STATE_PATH = get_etl_outputs_dir() / "auto_ingest_state.json"
+@@
+     def __init__(self, config: IngestionConfig):
+         self.config = config
+         data_root = config.data_root
+-        self.energy_dir = data_root / "Energy Usage 1hr Interval(JAN to JUN)"
+-        self.csi_dir = data_root / "CSI Monthly(JAN to JUN)"
+-        self.mes_dir = data_root / "MES Monthly(JAN to JUN)"
++        self.energy_dir = get_energy_dataset_dir(data_root)
++        self.csi_dir = get_csi_dataset_dir(data_root)
++        self.mes_dir = get_mes_dataset_dir(data_root)
+         self.state = IngestionState(config.state_path)
+         self._shutdown = False
+*** End Patch

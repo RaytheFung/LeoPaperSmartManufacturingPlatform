@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT_DIR"
+
 echo "Starting Smart Manufacturing App..."
 echo "========================================="
 echo "App will be available at:"
@@ -9,15 +12,14 @@ echo "  → http://127.0.0.1:8502"
 echo "Press Ctrl+C to stop the server"
 echo "========================================="
 
-# Create and use a local venv if missing
-if [[ ! -d .venv ]]; then
-  echo "Creating Python virtual environment (.venv)..."
-  /usr/bin/python3 -m venv .venv
-fi
+ENV_DIR="$ROOT_DIR/.conda311"
+BOOTSTRAP_SCRIPT="$ROOT_DIR/scripts/bootstrap_py311_and_run.sh"
 
-echo "Ensuring dependencies are installed..."
-"$(pwd)"/.venv/bin/pip install -q --upgrade pip
-"$(pwd)"/.venv/bin/pip install -q -r requirements.txt
+if [[ ! -x "$ENV_DIR/bin/streamlit" ]]; then
+  echo "Repo-local Python 3.11 env missing or incomplete."
+  echo "Bootstrapping Miniforge + .conda311 ..."
+  exec bash "$BOOTSTRAP_SCRIPT"
+fi
 
 # Prepare log directory/file
 mkdir -p .streamlit
@@ -26,7 +28,8 @@ PID_FILE=.streamlit/server.pid
 
 # Start the app on port 8502 (matches .streamlit/config.toml)
 echo "Launching Streamlit..."
-nohup "$(pwd)"/.venv/bin/streamlit run app.py \
+pkill -f "streamlit run app.py" 2>/dev/null || true
+nohup "$ENV_DIR/bin/streamlit" run app.py \
   --server.port 8502 \
   --server.address 0.0.0.0 \
   --server.headless true \

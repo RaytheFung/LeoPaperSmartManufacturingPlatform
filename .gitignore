@@ -1,41 +1,30 @@
-# macOS
 .DS_Store
-
-# Python cache
 __pycache__/
 *.pyc
-*.pyo
 
-# Virtual env / Conda / local runtimes
-.venv/
-venv/
-env/
-.conda/
-conda/
-.conda311/
-conda311/
-.miniforge/
-miniforge/
-
-# Local app / editor settings
-.vscode/
-.streamlit/
-.installer_cache/
-
-# Python version file
-.python-version
-
-# Local database
 *.db
 *.sqlite
 *.sqlite3
 
-# Generated outputs
-etl_outputs/
+.venv/
+.conda311/
+.miniforge/
+.installer_cache/
+.codex/
+activate
 
-# Large raw data folders
-2025 DataSet(JAN to JUN)/
+.streamlit/server.log
+.streamlit/server.pid
 
-# Raw spreadsheets inside data/
-data/*.xlsx
-data/*.xls
+.vscode/
+
+~$*.xlsx
+
+artifacts/db_snapshots/
+artifacts/diagnostics/
+artifacts/ppt_task10/
+docs/fyp_report/
+docs/fyp_report_reference/
+etl_outputs/*
+!etl_outputs/.gitkeep
+!etl_outputs/ETL_OUTPUTS_GUIDE.md

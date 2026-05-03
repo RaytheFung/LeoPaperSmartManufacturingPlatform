@@ -1,0 +1,448 @@
+{
+  "protocol": {
+    "db_path": "/tmp/task13r_v3_temp.db",
+    "active_model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_efficiency_model.pkl",
+    "active_preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_preprocessor.pkl",
+    "candidate_model_path": "/tmp/task14b_candidate/production_efficiency_model.candidate.task14b.pkl",
+    "candidate_preprocessor_path": "/tmp/task14b_candidate/production_preprocessor.candidate.task14b.pkl",
+    "evaluation_strategy": "time_aware_multi_month_holdout",
+    "holdout_month_count": 2,
+    "train_months": [
+      "January 2025",
+      "February 2025",
+      "March 2025",
+      "April 2025",
+      "May 2025",
+      "June 2025",
+      "July 2025",
+      "August 2025",
+      "September 2025",
+      "October 2025",
+      "November 2025",
+      "December 2025"
+    ],
+    "eval_months": [
+      "January 2026",
+      "February 2026"
+    ],
+    "train_rows": 313724,
+    "eval_rows": 50675
+  },
+  "dataset_summary": {
+    "rows_loaded": 879978,
+    "rows_hard_blocked": 512241,
+    "rows_after_hard_block": 367737,
+    "rows_after_filtering": 364399,
+    "distinct_machines_retained": 84,
+    "month_coverage": [
+      "January 2025",
+      "February 2025",
+      "March 2025",
+      "April 2025",
+      "May 2025",
+      "June 2025",
+      "July 2025",
+      "August 2025",
+      "September 2025",
+      "October 2025",
+      "November 2025",
+      "December 2025",
+      "January 2026",
+      "February 2026"
+    ],
+    "team_size_fallback_summary": {
+      "rows_using_team_size_from_preprocessor_default": 169,
+      "distinct_machines_using_team_size_from_preprocessor_default": 30,
+      "monthly_rows_using_team_size_from_preprocessor_default": {
+        "2025-01": 8,
+        "2025-02": 7,
+        "2025-03": 3,
+        "2025-04": 4,
+        "2025-05": 14,
+        "2025-06": 36,
+        "2025-07": 13,
+        "2025-08": 16,
+        "2025-10": 5,
+        "2025-11": 20,
+        "2025-12": 16,
+        "2026-01": 14,
+        "2026-02": 13
+      },
+      "rows_using_team_size_from_manpower": 0,
+      "distinct_machines_using_team_size_from_manpower": 0,
+      "monthly_rows_using_team_size_from_manpower": {}
+    },
+    "filtered_month_distribution": [
+      {
+        "month": "January 2025",
+        "rows_after_filtering": 3945,
+        "distinct_machines": 24
+      },
+      {
+        "month": "February 2025",
+        "rows_after_filtering": 12542,
+        "distinct_machines": 52
+      },
+      {
+        "month": "March 2025",
+        "rows_after_filtering": 24042,
+        "distinct_machines": 62
+      },
+      {
+        "month": "April 2025",
+        "rows_after_filtering": 27071,
+        "distinct_machines": 70
+      },
+      {
+        "month": "May 2025",
+        "rows_after_filtering": 32097,
+        "distinct_machines": 76
+      },
+      {
+        "month": "June 2025",
+        "rows_after_filtering": 32854,
+        "distinct_machines": 75
+      },
+      {
+        "month": "July 2025",
+        "rows_after_filtering": 34956,
+        "distinct_machines": 79
+      },
+      {
+        "month": "August 2025",
+        "rows_after_filtering": 31087,
+        "distinct_machines": 80
+      },
+      {
+        "month": "September 2025",
+        "rows_after_filtering": 27657,
+        "distinct_machines": 82
+      },
+      {
+        "month": "October 2025",
+        "rows_after_filtering": 24379,
+        "distinct_machines": 78
+      },
+      {
+        "month": "November 2025",
+        "rows_after_filtering": 30148,
+        "distinct_machines": 73
+      },
+      {
+        "month": "December 2025",
+        "rows_after_filtering": 32946,
+        "distinct_machines": 76
+      },
+      {
+        "month": "January 2026",
+        "rows_after_filtering": 32197,
+        "distinct_machines": 76
+      },
+      {
+        "month": "February 2026",
+        "rows_after_filtering": 18478,
+        "distinct_machines": 75
+      }
+    ]
+  },
+  "eval_slice_inference_context": {
+    "rows_loaded_for_inference": 120846,
+    "rows_eligible_for_inference": 51519,
+    "rows_blocked_for_missing_features": 69327,
+    "latest_machine_candidates": 153,
+    "latest_machine_blocked_after_predictor_gate": 0,
+    "coverage": [
+      {
+        "support_path": "Direct canonical row",
+        "coverage_bucket": "Direct canonical",
+        "rows": 51140,
+        "share": 0.42318322493090377
+      },
+      {
+        "support_path": "Adapted row",
+        "coverage_bucket": "Adapted",
+        "rows": 352,
+        "share": 0.0029127981066812306
+      },
+      {
+        "support_path": "Defaulted row",
+        "coverage_bucket": "Defaulted",
+        "rows": 27,
+        "share": 0.0002234248547738444
+      },
+      {
+        "support_path": "Blocked row",
+        "coverage_bucket": "Blocked",
+        "rows": 69327,
+        "share": 0.5736805521076411
+      }
+    ],
+    "blocked_summary": [
+      {
+        "blocked_reason": "missing_positive_good_qty",
+        "row_count": 68596,
+        "share": 0.9894557675941552
+      },
+      {
+        "blocked_reason": "missing_hours_since_last_maintenance",
+        "row_count": 731,
+        "share": 0.010544232405844765
+      }
+    ]
+  },
+  "active_holdout": {
+    "passed": true,
+    "model_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_efficiency_model.pkl",
+    "preprocessor_path": "/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/models/production_preprocessor.pkl",
+    "eval_months": [
+      "January 2026",
+      "February 2026"
+    ],
+    "rows_considered": 50675,
+    "rows_evaluated": 50675,
+    "rows_non_model_source": 0,
+    "distinct_machines_retained": 77,
+    "r2_score": 0.7605741131053376,
+    "mae": 0.01499678606743838,
+    "rmse": 0.1523568146386601,
+    "failure_reason": null,
+    "first_non_model_prediction": null
+  },
+  "candidate_training": {
+    "best_model_name": "random_forest",
+    "best_model_metrics": {
+      "r2_score": 0.812714004142606,
+      "mae": 0.012804444950338988,
+      "rmse": 0.13475006522302904,
+      "evaluation_strategy": "time_aware_multi_month_holdout",
+      "train_months": [
+        "January 2025",
+        "February 2025",
+        "March 2025",
+        "April 2025",
+        "May 2025",
+        "June 2025",
+        "July 2025",
+        "August 2025",
+        "September 2025",
+        "October 2025",
+        "November 2025",
+        "December 2025"
+      ],
+      "eval_months": [
+        "January 2026",
+        "February 2026"
+      ],
+      "train_rows": 313724,
+      "eval_rows": 50675,
+      "rows_loaded": 879978,
+      "rows_after_hard_block": 367737,
+      "rows_after_filtering": 364399,
+      "distinct_machines_retained": 84
+    },
+    "all_model_metrics": {
+      "linear_regression": {
+        "r2_score": 0.006707922657925303,
+        "mae": 0.046101496332793354,
+        "rmse": 0.31032360909301165,
+        "evaluation_strategy": "time_aware_multi_month_holdout",
+        "train_months": [
+          "January 2025",
+          "February 2025",
+          "March 2025",
+          "April 2025",
+          "May 2025",
+          "June 2025",
+          "July 2025",
+          "August 2025",
+          "September 2025",
+          "October 2025",
+          "November 2025",
+          "December 2025"
+        ],
+        "eval_months": [
+          "January 2026",
+          "February 2026"
+        ],
+        "train_rows": 313724,
+        "eval_rows": 50675,
+        "rows_loaded": 879978,
+        "rows_after_hard_block": 367737,
+        "rows_after_filtering": 364399,
+        "distinct_machines_retained": 84
+      },
+      "random_forest": {
+        "r2_score": 0.812714004142606,
+        "mae": 0.012804444950338988,
+        "rmse": 0.13475006522302904,
+        "evaluation_strategy": "time_aware_multi_month_holdout",
+        "train_months": [
+          "January 2025",
+          "February 2025",
+          "March 2025",
+          "April 2025",
+          "May 2025",
+          "June 2025",
+          "July 2025",
+          "August 2025",
+          "September 2025",
+          "October 2025",
+          "November 2025",
+          "December 2025"
+        ],
+        "eval_months": [
+          "January 2026",
+          "February 2026"
+        ],
+        "train_rows": 313724,
+        "eval_rows": 50675,
+        "rows_loaded": 879978,
+        "rows_after_hard_block": 367737,
+        "rows_after_filtering": 364399,
+        "distinct_machines_retained": 84
+      },
+      "xgboost": {
+        "r2_score": 0.45202642295959194,
+        "mae": 0.018341191294290352,
+        "rmse": 0.23049215083984392,
+        "evaluation_strategy": "time_aware_multi_month_holdout",
+        "train_months": [
+          "January 2025",
+          "February 2025",
+          "March 2025",
+          "April 2025",
+          "May 2025",
+          "June 2025",
+          "July 2025",
+          "August 2025",
+          "September 2025",
+          "October 2025",
+          "November 2025",
+          "December 2025"
+        ],
+        "eval_months": [
+          "January 2026",
+          "February 2026"
+        ],
+        "train_rows": 313724,
+        "eval_rows": 50675,
+        "rows_loaded": 879978,
+        "rows_after_hard_block": 367737,
+        "rows_after_filtering": 364399,
+        "distinct_machines_retained": 84
+      }
+    },
+    "month_coverage": [
+      "January 2025",
+      "February 2025",
+      "March 2025",
+      "April 2025",
+      "May 2025",
+      "June 2025",
+      "July 2025",
+      "August 2025",
+      "September 2025",
+      "October 2025",
+      "November 2025",
+      "December 2025",
+      "January 2026",
+      "February 2026"
+    ],
+    "rows_loaded": 879978,
+    "rows_after_filtering": 364399,
+    "distinct_machines_retained": 84,
+    "feature_columns": [
+      "hour_of_day",
+      "day_of_week",
+      "month",
+      "is_weekend",
+      "is_night_shift",
+      "machine_type_encoded",
+      "machine_number",
+      "team_size",
+      "task_complexity",
+      "hours_since_last_maintenance",
+      "maintenance_urgency",
+      "needs_maintenance",
+      "maintenance_intensity_30d",
+      "cumulative_maintenance_count",
+      "production_qty",
+      "last_maintenance_type_encoded",
+      "team_leader_encoded",
+      "material_code_encoded"
+    ],
+    "team_size_fallback_summary": {
+      "rows_using_team_size_from_preprocessor_default": 169,
+      "distinct_machines_using_team_size_from_preprocessor_default": 30,
+      "monthly_rows_using_team_size_from_preprocessor_default": {
+        "2025-01": 8,
+        "2025-02": 7,
+        "2025-03": 3,
+        "2025-04": 4,
+        "2025-05": 14,
+        "2025-06": 36,
+        "2025-07": 13,
+        "2025-08": 16,
+        "2025-10": 5,
+        "2025-11": 20,
+        "2025-12": 16,
+        "2026-01": 14,
+        "2026-02": 13
+      },
+      "rows_using_team_size_from_manpower": 0,
+      "distinct_machines_using_team_size_from_manpower": 0,
+      "monthly_rows_using_team_size_from_manpower": {}
+    }
+  },
+  "candidate_holdout": {
+    "passed": true,
+    "model_path": "/tmp/task14b_candidate/production_efficiency_model.candidate.task14b.pkl",
+    "preprocessor_path": "/tmp/task14b_candidate/production_preprocessor.candidate.task14b.pkl",
+    "eval_months": [
+      "January 2026",
+      "February 2026"
+    ],
+    "rows_considered": 50675,
+    "rows_evaluated": 50675,
+    "rows_non_model_source": 0,
+    "distinct_machines_retained": 77,
+    "r2_score": 0.812714004142606,
+    "mae": 0.012804444950338988,
+    "rmse": 0.13475006522302904,
+    "failure_reason": null,
+    "first_non_model_prediction": null
+  },
+  "candidate_smoke": {
+    "passed": true,
+    "failure_reason": null,
+    "prediction_source": "model",
+    "predicted_efficiency": 0.008997239070611677,
+    "confidence": 0.9028894697049799,
+    "sample_month": "January 2025",
+    "sample_machine_id": "024-135",
+    "sample_hour_ts": "2025-01-12T16:00:00",
+    "candidate_rows_considered": 1,
+    "months_considered": [
+      "January 2025",
+      "February 2025",
+      "March 2025",
+      "April 2025",
+      "May 2025",
+      "June 2025",
+      "July 2025",
+      "August 2025",
+      "September 2025",
+      "October 2025",
+      "November 2025",
+      "December 2025",
+      "January 2026",
+      "February 2026"
+    ],
+    "predictor_status": {
+      "model_artifact_present": true,
+      "predictor_bundle_present": true,
+      "canonical_inference_enabled": true
+    },
+    "first_failure": null
+  }
+}

@@ -31,12 +31,20 @@ from typing import Dict, Iterable, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA_ROOT = REPO_ROOT / "2025 DataSet(JAN to JUN)"
-DEFAULT_STATE_PATH = REPO_ROOT / "etl_outputs" / "auto_ingest_state.json"
-
-# Ensure local modules can be imported when this script is run directly
 if str(REPO_ROOT) not in sys.path:
-    sys.path.append(str(REPO_ROOT))
+    sys.path.insert(0, str(REPO_ROOT))
+
+from core.runtime_paths import (
+    get_csi_dataset_dir,
+    get_energy_dataset_dir,
+    get_etl_outputs_dir,
+    get_raw_dataset_root,
+    get_mes_dataset_dir,
+)
+
+
+DEFAULT_DATA_ROOT = get_raw_dataset_root()
+DEFAULT_STATE_PATH = get_etl_outputs_dir() / "auto_ingest_state.json"
 
 
 def _collect_excel_files(directory: Path) -> Dict[str, float]:
@@ -117,9 +125,9 @@ class AutoIngestionLoop:
     def __init__(self, config: IngestionConfig):
         self.config = config
         data_root = config.data_root
-        self.energy_dir = data_root / "Energy Usage 1hr Interval(JAN to JUN)"
-        self.csi_dir = data_root / "CSI Monthly(JAN to JUN)"
-        self.mes_dir = data_root / "MES Monthly(JAN to JUN)"
+        self.energy_dir = get_energy_dataset_dir(data_root)
+        self.csi_dir = get_csi_dataset_dir(data_root)
+        self.mes_dir = get_mes_dataset_dir(data_root)
         self.state = IngestionState(config.state_path)
         self._shutdown = False
 

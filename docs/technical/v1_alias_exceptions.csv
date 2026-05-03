@@ -1,0 +1,6 @@
+﻿issue_type,canonical_machine_id,preferred_mes_resource,secondary_mes_alias,evidence,action
+MES_alias_inconsistency,035-017,1035-10005,1035-00017,Maintenance maps 1035-10005 ↔ 035-017; Energy labels use 1035-10005; CSI↔MES co-occurrence also shows 1035-00017.,Treat 1035-00017 as legacy/suspect alias; normalize to 1035-10005 before joining.
+MES_alias_inconsistency,035-018,1035-10007,1035-00018,Maintenance maps 1035-10007 ↔ 035-018; Energy labels use 1035-10007; CSI↔MES co-occurrence also shows 1035-00018.,Treat 1035-00018 as legacy/suspect alias; normalize to 1035-10007 before joining.
+Energy_only_candidate,024-070,,,Energy labels exist for 024-070 but no CSI/MES production rows in Apr-Jun sample.,Keep in alias registry as energy-only candidate; exclude from production_joinable set.
+Maintenance_legacy_alias,1264-00003,1264-00003,342-002,"Maintenance links 1264-00003 ↔ 342-002, but current CSI already uses 1264-00003.","Keep 342-002 as maintenance-only legacy alias, not canonical ID."
+Maintenance_legacy_alias,1099-00004,1099-00004,550-003,"Maintenance links 1099-00004 ↔ 550-003, but CSI/MES both use 1099-00004.","Keep 550-003 as maintenance-only legacy alias, not canonical ID."

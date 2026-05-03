@@ -1,0 +1,11 @@
+Task 3B1a reconcile diff evidence
+
+Files were untracked relative to the current git commit history, so standard tracked-file
+`git diff --stat` output was empty for these paths. Diffstat was captured with
+`git diff --no-index --stat -- /dev/null <file>`.
+
+/dev/null => core/bronze_raw_store.py | 396 ++++++++++++++++++++++++++++++++++
+1 file changed, 396 insertions(+)
+
+/dev/null => tests/test_bronze_raw_store.py | 313 ++++++++++++++++++++++++++++
+1 file changed, 313 insertions(+)

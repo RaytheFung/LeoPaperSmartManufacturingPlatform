@@ -1,0 +1,25 @@
+Task 2A diff summary
+Date: 2026-03-22
+
+Preferred command:
+git diff --stat
+
+Result:
+Unavailable. This directory is not a Git working tree, so `git diff --stat` could not be used here.
+
+Manual Task 2A change summary:
+- added: core/runtime_paths.py
+- modified: app.py
+- modified: modules/etl_module.py
+- modified: modules/unified_view_module.py
+- modified: scripts/process_jan_to_june_2025.py
+- modified: scripts/auto_ingest.py
+
+Task 2A scope summary:
+- added one shared runtime path helper;
+- normalized live-first dataset directory resolution with explicit legacy fallback;
+- removed or reduced ad hoc `sys.path` mutations only in touched files;
+- replaced selected cwd-relative `data/`, `etl_outputs/`, and DB references with canonical repo-relative paths;
+- no business-logic changes;
+- no schema changes;
+- no UI behavior changes.
