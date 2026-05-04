@@ -1,0 +1,117 @@
+{
+  "schema_version": "source_manifest.v1",
+  "contract_status": "foundation_only",
+  "runtime_effect": "Documents accepted source scope for future ETL hardening; active ETL behavior is unchanged in Stage B1.",
+  "accepted_canonical_months": [
+    "2025-01",
+    "2025-02",
+    "2025-03",
+    "2025-04",
+    "2025-05",
+    "2025-06",
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02"
+  ],
+  "source_families": {
+    "energy_hourly_report_v1": {
+      "status": "supported",
+      "description": "Canonical hourly energy workbook contract used for the machine-hour backbone."
+    },
+    "csi_monthly_xlsx_v1": {
+      "status": "supported",
+      "description": "Initial-scope CSI monthly xlsx workbook contract."
+    },
+    "csi_monthly_xls_variant_v1": {
+      "status": "registered_variant",
+      "description": "Extended-scope CSI xls workbook variant; reader availability remains dependency-gated."
+    },
+    "mes_monthly_report_v1": {
+      "status": "supported",
+      "description": "MES monthly production report contract."
+    },
+    "maintenance_transaction_v1": {
+      "status": "supported",
+      "description": "Maintenance transaction export contract for evidence and recency context."
+    },
+    "energy_daily_report_v1": {
+      "status": "supplementary_only",
+      "description": "Daily energy remains supplementary and outside the hourly canonical backbone."
+    },
+    "energy_tariff_aggregate_v1": {
+      "status": "separate_family",
+      "description": "Tariff aggregate energy remains separate from hourly operational energy."
+    }
+  },
+  "source_scopes": [
+    {
+      "scope_id": "2025_jan_jun_initial",
+      "root_folder": "source_data/2025_jan_jun_initial",
+      "accepted_months": [
+        "2025-01",
+        "2025-02",
+        "2025-03",
+        "2025-04",
+        "2025-05",
+        "2025-06"
+      ],
+      "expected_folders": {
+        "energy": "Energy Usage 1hr Interval",
+        "csi": "CSI Monthly",
+        "mes": "MES Monthly",
+        "maintenance": "(12:3:2026) Maintenance"
+      },
+      "source_family_by_domain": {
+        "energy": "energy_hourly_report_v1",
+        "csi": "csi_monthly_xlsx_v1",
+        "mes": "mes_monthly_report_v1",
+        "maintenance": "maintenance_transaction_v1"
+      },
+      "notes": [
+        "Initial accepted raw source package for January 2025 through June 2025 canonical rebuild paths.",
+        "Folder names are relative to the repository root and do not require absolute local paths."
+      ]
+    },
+    {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "root_folder": "source_data/2025_jul_2026_feb_collected",
+      "accepted_months": [
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02"
+      ],
+      "expected_folders": {
+        "energy": "Energy(July2025-March2026)",
+        "csi": "CSI(July2025 to Feb2026)",
+        "mes": "."
+      },
+      "source_family_by_domain": {
+        "energy": "energy_hourly_report_v1",
+        "csi": "csi_monthly_xls_variant_v1",
+        "mes": "mes_monthly_report_v1"
+      },
+      "notes": [
+        "Extended accepted raw source package for July 2025 through February 2026 canonical extension.",
+        "Grouped energy workbooks include March 2026 rows, but March 2026 is not accepted canonical runtime scope in this manifest."
+      ]
+    }
+  ],
+  "supplementary_out_of_scope": [
+    {
+      "month_key": "2026-03",
+      "source_domain": "energy",
+      "status": "supplementary_out_of_scope",
+      "note": "March 2026 energy rows exist in grouped source files but remain outside accepted canonical runtime scope unless reopened by a later task."
+    }
+  ]
+}

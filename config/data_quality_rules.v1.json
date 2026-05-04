@@ -1,0 +1,142 @@
+{
+  "schema_version": "data_quality_rules.v1",
+  "contract_status": "foundation_only",
+  "runtime_effect": "Documents known data-quality rule categories for future hardening; active Silver/Gold behavior is unchanged in Stage B1.",
+  "accepted_month_range": {
+    "start_month": "2025-01",
+    "end_month": "2026-02",
+    "excluded_by_default": [
+      "2026-03"
+    ]
+  },
+  "allowed_energy_scope_statuses": [
+    "complete",
+    "partial",
+    "flagged_partial",
+    "blocked",
+    "supplementary_out_of_scope"
+  ],
+  "accepted_sentinel_anomalies": [
+    {
+      "rule_id": "energy_aug_2025_024_147_uv_sentinel",
+      "source_family": "energy_hourly_report_v1",
+      "month_key": "2025-08",
+      "canonical_machine_id": "024-147",
+      "raw_label": "1024-10032/024-147印刷機UV",
+      "start_ts": "2025-08-17T08:00:00",
+      "end_ts": "2025-08-17T17:00:00",
+      "sentinel_value": 99999999.9999,
+      "handling": "exclude_from_canonical",
+      "intent": "Exclude known impossible sentinel energy/cost values from the hourly backbone."
+    }
+  ],
+  "partial_energy_month_flags": [
+    {
+      "rule_id": "energy_oct_2025_024_094_partial",
+      "month_key": "2025-10",
+      "canonical_machine_id": "024-094",
+      "raw_label": "印刷机024-094",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_oct_2025_1024_10006_uv_partial",
+      "month_key": "2025-10",
+      "canonical_machine_id": "1024-10006",
+      "raw_label": "印刷機1024-10006（UV）",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_oct_2025_1024_10006_main_partial",
+      "month_key": "2025-10",
+      "canonical_machine_id": "1024-10006",
+      "raw_label": "印刷機1024-10006（主機）",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_oct_2025_1024_10006_motor_partial",
+      "month_key": "2025-10",
+      "canonical_machine_id": "1024-10006",
+      "raw_label": "印刷機1024-10006（馬達）",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_oct_2025_024_082_blower_partial",
+      "month_key": "2025-10",
+      "canonical_machine_id": "024-082",
+      "raw_label": "印刷機024-082風泵用電(測量)",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_nov_2025_1024_10009_ir_uv_partial",
+      "month_key": "2025-11",
+      "canonical_machine_id": "1024-10009",
+      "raw_label": "印刷機1024-10009（IR+UV）",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_jan_2026_024_010_partial",
+      "month_key": "2026-01",
+      "canonical_machine_id": "024-010",
+      "raw_label": "印刷機024-010",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_jan_2026_024_075_uv_partial",
+      "month_key": "2026-01",
+      "canonical_machine_id": "024-075",
+      "raw_label": "印刷機024-075 UV",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_jan_2026_024_075_main_partial",
+      "month_key": "2026-01",
+      "canonical_machine_id": "024-075",
+      "raw_label": "印刷機024-075主機",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_jan_2026_024_080_main_partial",
+      "month_key": "2026-01",
+      "canonical_machine_id": "024-080",
+      "raw_label": "印刷機024-080主機",
+      "quality_flag": "localized_partial_meter_month"
+    },
+    {
+      "rule_id": "energy_feb_2026_024_080_uv_partial",
+      "month_key": "2026-02",
+      "canonical_machine_id": "024-080",
+      "raw_label": "印刷機024-080 UV",
+      "quality_flag": "localized_partial_meter_month"
+    }
+  ],
+  "unresolved_quarantine_ids": [
+    {
+      "rule_id": "feb_2026_1262_00012_unresolved_quarantine",
+      "month_key": "2026-02",
+      "raw_or_candidate_id": "1262-00012",
+      "source_families": [
+        "csi_monthly_xls_variant_v1",
+        "mes_monthly_report_v1"
+      ],
+      "handling": "quarantine_from_canonical_overlay",
+      "intent": "No safe canonical machine mapping was proven for the February 2026 CSI/MES rows."
+    }
+  ],
+  "quantity_overlay_anomaly_types": [
+    {
+      "anomaly_type": "production_minutes_gt_60",
+      "handling": "exclude_from_quantity_replacement_scope",
+      "intent": "Keep dominant-event quantity semantics fixed where CSI minute budget is anomalous."
+    },
+    {
+      "anomaly_type": "dominant_identity_conflict",
+      "handling": "block_quantity_replacement",
+      "intent": "Do not replace quantity when dominant event identity is not stable."
+    },
+    {
+      "anomaly_type": "material_misalignment",
+      "handling": "flag_for_audit",
+      "intent": "Expose material alignment risk without changing live quantity semantics."
+    }
+  ]
+}
