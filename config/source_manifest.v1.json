@@ -106,6 +106,167 @@
       ]
     }
   ],
+  "month_source_files": {
+    "2025-07": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表__2025.7.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年7月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "complete",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready",
+      "notes": [
+        "July 2025 CSI is accepted after direct file audit; the earlier Aug-start wording was inconsistent with the actual source package."
+      ]
+    },
+    "2025-08": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年8月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "partial",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready_with_flags",
+      "notes": [
+        "Energy remains usable but excludes the 2025-08-17 08:00-17:00 sentinel anomaly rows for 1024-10032/024-147印刷機UV."
+      ]
+    },
+    "2025-09": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年9月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "complete",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready",
+      "notes": []
+    },
+    "2025-10": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2025.8-10.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年10月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "partial",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready_with_flags",
+      "notes": [
+        "Energy contains localized partial meter-month cases in October 2025 and is accepted with explicit flags rather than a global block."
+      ]
+    },
+    "2025-11": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2025.11-12.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年11月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "partial",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready_with_flags",
+      "notes": [
+        "Energy contains a localized November 2025 partial meter-month case for 印刷機1024-10009（IR+UV）."
+      ]
+    },
+    "2025-12": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2025.11-12.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2025年12月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "complete",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready",
+      "notes": []
+    },
+    "2026-01": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2026年1月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "partial",
+        "csi": "complete",
+        "mes": "complete"
+      },
+      "backfill_readiness": "ready_with_flags",
+      "notes": [
+        "Energy contains localized January 2026 partial meter-month cases and is accepted with flags."
+      ]
+    },
+    "2026-02": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "accepted",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"
+      ],
+      "csi_file": "CSI(July2025 to Feb2026)/CSI印刷心電圖報表2026年2月.xls",
+      "mes_file": "印刷機MES生產數據-2025年3月1日至2026年2月28日.xlsx",
+      "family_status": {
+        "energy": "partial",
+        "csi": "partial",
+        "mes": "partial"
+      },
+      "backfill_readiness": "ready_with_flags",
+      "notes": [
+        "Energy contains localized February 2026 partial meter-month cases and is accepted with flags.",
+        "CSI/MES rows for unresolved machine 1262-00012 remain quarantined because no safe canonical mapping was proven in Task13."
+      ]
+    },
+    "2026-03": {
+      "scope_id": "2025_jul_2026_feb_collected",
+      "canonical_scope_status": "blocked_out_of_scope",
+      "energy_files": [
+        "Energy(July2025-March2026)/能耗、費用報表_2026.1-3.xlsx"
+      ],
+      "csi_file": null,
+      "mes_file": null,
+      "family_status": {
+        "energy": "blocked",
+        "csi": "blocked",
+        "mes": "blocked"
+      },
+      "backfill_readiness": "blocked",
+      "notes": [
+        "March 2026 is intentionally excluded from Task13 scope even though grouped energy files include March rows and MES status/create timestamps extend into early March."
+      ]
+    }
+  },
   "supplementary_out_of_scope": [
     {
       "month_key": "2026-03",

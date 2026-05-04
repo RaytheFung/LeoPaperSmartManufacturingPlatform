@@ -21,9 +21,17 @@ The manifest currently documents:
 
 Paths in the manifest are relative to the repository root. The manifest must not require absolute local paths.
 
+## Stage B2 Source Discovery Equivalence
+
+Stage B2 adds a lightweight `month_source_files` map for the accepted extended source months and a read-only helper layer in `core/source_manifest_discovery.py`.
+These helpers can resolve manifest-backed source paths under an explicitly supplied data root, build an availability matrix, and compare the manifest map with the legacy `modules.etl_module` extension mapping.
+
+This is an equivalence layer only. Active ETL, canonical materialization, Streamlit runtime defaults, Silver normalization, Gold fact building, ML training, and model artifacts remain unchanged.
+`2026-03` remains blocked and out of canonical scope even though grouped source workbooks can contain March rows.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B1 does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
