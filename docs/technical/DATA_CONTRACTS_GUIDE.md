@@ -66,9 +66,17 @@ Explicit `legacy`, `manifest`, and `compare` modes remain available for rollback
 This is a narrow historical-source resolver default only.
 Manual upload/runtime ETL behavior is unchanged, no Streamlit operational manifest selector is added, March 2026 remains blocked, and data-quality rules remain metadata-only.
 
+## Stage B5.2 Post-Switch Audit
+
+Stage B5.2 adds `modules.etl_module.build_source_discovery_default_policy_audit()`, a read-only helper that summarizes the active post-switch policy.
+It reports `default_policy: auto`, accepted extension months using manifest-backed discovery by default, Jan-Jun historical months remaining legacy, manual upload behavior remaining unchanged, and March 2026 remaining blocked.
+
+The ETL diagnostic expander now states the active default policy directly and displays a low-prominence policy audit table alongside the legacy-vs-manifest comparison evidence.
+This audit is source-discovery evidence only; it still does not run ETL, run canonical materialization, write the database, or prove ETL output/materialization equivalence.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B5.1 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B5.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

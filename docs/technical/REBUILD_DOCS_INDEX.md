@@ -36,8 +36,9 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB4_3_ETL_SOURCE_DISCOVERY_DIAGNOSTIC_SURFACE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_3_ETL_SOURCE_DISCOVERY_DIAGNOSTIC_SURFACE_REPORT.md)
 - [`POSTFYP_STAGEB4_4_MANIFEST_DEFAULT_SWITCH_DECISION_PACK.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_4_MANIFEST_DEFAULT_SWITCH_DECISION_PACK.md)
 - [`POSTFYP_STAGEB5_1_EXTENSION_MANIFEST_DEFAULT_SWITCH_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_1_EXTENSION_MANIFEST_DEFAULT_SWITCH_REPORT.md)
+- [`POSTFYP_STAGEB5_2_POST_SWITCH_AUDIT_AND_DIAGNOSTICS_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_2_POST_SWITCH_AUDIT_AND_DIAGNOSTICS_REPORT.md)
 
-These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.1.
+These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.2.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
 They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
 Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
@@ -46,6 +47,7 @@ Stage B4.2 adds a read-only compare diagnostic script/helper for extension-month
 Stage B4.3 exposes that diagnostic on the ETL page as a collapsed read-only reference surface without adding manifest as an operational ETL option.
 Stage B4.4 records the decision pack for a possible future narrow manifest default switch, including approval criteria, abort criteria, rollback, runtime smoke requirements, and remaining proof gaps.
 Stage B5.1 switches the historical resolver default to `auto`, using manifest-backed discovery for accepted extension months while keeping Jan-Jun and manual upload/runtime ETL behavior unchanged.
+Stage B5.2 adds a read-only post-switch audit helper and hardens the ETL diagnostic wording so the active default policy is visible without running ETL.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

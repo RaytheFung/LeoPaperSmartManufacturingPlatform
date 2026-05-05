@@ -324,6 +324,140 @@ def build_source_discovery_diagnostic_snapshot(data_root: Path | str | None = No
     }
 
 
+def build_source_discovery_default_policy_audit(data_root: Path | str | None = None) -> dict[str, object]:
+    resolver = ETLPipelineModule(initialize_schema=False)
+    accepted_extension_months = [
+        month_label
+        for month_label, spec in EXTENSION_MONTH_SOURCE_MAPPINGS.items()
+        if not any(status == "blocked" for status in spec["family_status"].values())
+    ]
+    blocked_months = [
+        month_label
+        for month_label, spec in EXTENSION_MONTH_SOURCE_MAPPINGS.items()
+        if any(status == "blocked" for status in spec["family_status"].values())
+    ]
+    initial_months = [f"{month_name} 2025" for month_name in ETLPipelineModule.HISTORICAL_MONTH_FILE_MAPPINGS]
+
+    rows = []
+    for month_label in initial_months:
+        default_result = _source_discovery_resolution_result(resolver, month_label, data_root=data_root)
+        legacy_result = _source_discovery_resolution_result(
+            resolver,
+            month_label,
+            data_root=data_root,
+            discovery_mode="legacy",
+        )
+        row = {
+            "month_label": month_label,
+            "default_status": default_result["status"],
+            "explicit_legacy_status": legacy_result["status"],
+            "compare_status": "not_applicable_initial_legacy",
+            "default_source_discovery_mode": default_result["source_discovery_mode"],
+            "backfill_readiness": default_result["backfill_readiness"],
+            "expected_policy": "legacy",
+        }
+        row["ok"] = row["default_status"] == "resolved" and row["default_source_discovery_mode"] == "legacy"
+        rows.append(row)
+
+    for month_label in [*accepted_extension_months, *blocked_months]:
+        expected_policy = "blocked" if month_label in blocked_months else "manifest"
+        default_result = _source_discovery_resolution_result(resolver, month_label, data_root=data_root)
+        legacy_result = _source_discovery_resolution_result(
+            resolver,
+            month_label,
+            data_root=data_root,
+            discovery_mode="legacy",
+        )
+        compare_result = _source_discovery_resolution_result(
+            resolver,
+            month_label,
+            data_root=data_root,
+            discovery_mode="compare",
+        )
+        row = {
+            "month_label": month_label,
+            "default_status": default_result["status"],
+            "explicit_legacy_status": legacy_result["status"],
+            "compare_status": _source_discovery_compare_status(compare_result),
+            "default_source_discovery_mode": default_result["source_discovery_mode"],
+            "backfill_readiness": default_result["backfill_readiness"],
+            "expected_policy": expected_policy,
+        }
+        if expected_policy == "blocked":
+            row["ok"] = (
+                row["default_status"] == "blocked"
+                and row["explicit_legacy_status"] == "blocked"
+                and row["compare_status"] == "expected_blocked"
+            )
+        else:
+            row["ok"] = (
+                row["default_status"] == "resolved"
+                and row["default_source_discovery_mode"] == "auto_manifest"
+                and row["compare_status"] == "match"
+            )
+        rows.append(row)
+
+    return {
+        "default_policy": "auto",
+        "extension_default": "manifest",
+        "initial_jan_jun_default": "legacy",
+        "manual_upload_behavior": "unchanged",
+        "accepted_extension_months": accepted_extension_months,
+        "blocked_months": blocked_months,
+        "rows": rows,
+        "success": all(row["ok"] for row in rows),
+    }
+
+
+def _source_discovery_resolution_result(
+    resolver: "ETLPipelineModule",
+    month_label: str,
+    *,
+    data_root: Path | str | None = None,
+    discovery_mode: str | None = None,
+) -> dict[str, object]:
+    try:
+        if discovery_mode is None:
+            payload = resolver.resolve_historical_month_sources(month_label, data_root=data_root)
+        else:
+            payload = resolver.resolve_historical_month_sources(
+                month_label,
+                data_root=data_root,
+                discovery_mode=discovery_mode,
+            )
+    except Exception as exc:
+        error_payload = _source_discovery_error_payload(discovery_mode or "auto", exc)
+        return {
+            "status": "blocked" if error_payload["blocked"] else "error",
+            "source_discovery_mode": None,
+            "backfill_readiness": "blocked" if error_payload["blocked"] else None,
+            "error": error_payload,
+            "payload": None,
+        }
+
+    return {
+        "status": "resolved",
+        "source_discovery_mode": payload.get("source_discovery_mode", "legacy"),
+        "backfill_readiness": payload.get("backfill_readiness"),
+        "error": None,
+        "payload": payload,
+    }
+
+
+def _source_discovery_compare_status(compare_result: dict[str, object]) -> str:
+    if compare_result["status"] == "blocked":
+        return "expected_blocked"
+    if compare_result["status"] != "resolved":
+        return "error"
+    payload = compare_result.get("payload") or {}
+    equivalence = payload.get("manifest_equivalence", {})
+    if equivalence.get("matches"):
+        return "match"
+    if equivalence.get("both_blocked"):
+        return "expected_blocked"
+    return "review"
+
+
 def _format_source_discovery_status(value: object) -> str:
     if not value:
         return "Unknown"
@@ -1790,19 +1924,36 @@ def _render_extension_source_availability() -> None:
 
 def _render_source_discovery_contract_check() -> None:
     with st.expander("Reference & Audit: Source Discovery Contract Check", expanded=False):
+        policy_audit = build_source_discovery_default_policy_audit()
         snapshot = build_source_discovery_diagnostic_snapshot()
         st.caption(
-            "Read-only diagnostic only. This does not change active ETL discovery defaults and does not run ETL. "
-            "It compares legacy extension-month discovery with manifest-backed discovery and does not initialize schema."
+            "Read-only diagnostic only. Active default policy: auto. Accepted extension months use manifest-backed "
+            "source discovery by default; Jan-Jun historical months remain legacy; manual uploads are unchanged."
         )
 
         summary_cols = st.columns(3)
         with summary_cols[0]:
-            st.metric("Accepted Months", int(snapshot["accepted_month_count"]))
+            st.metric("Default Policy", str(policy_audit["default_policy"]).upper())
         with summary_cols[1]:
-            st.metric("Expected Blocked", int(snapshot["expected_blocked_month_count"]))
+            st.metric("Extension Default", str(policy_audit["extension_default"]).title())
         with summary_cols[2]:
-            st.metric("Contract Status", "OK" if snapshot["success"] else "Review")
+            st.metric("Policy Audit", "OK" if policy_audit["success"] else "Review")
+
+        st.info(
+            "Accepted extension months use manifest-backed discovery by default. "
+            "Jan-Jun historical source discovery remains legacy, March 2026 remains blocked, and no ETL is run here."
+        )
+
+        st.markdown("##### Active Default Policy Audit")
+        st.dataframe(pd.DataFrame(policy_audit["rows"]), use_container_width=True, hide_index=True)
+
+        compare_cols = st.columns(3)
+        with compare_cols[0]:
+            st.metric("Accepted Months", int(snapshot["accepted_month_count"]))
+        with compare_cols[1]:
+            st.metric("Expected Blocked", int(snapshot["expected_blocked_month_count"]))
+        with compare_cols[2]:
+            st.metric("Compare Status", "OK" if snapshot["success"] else "Review")
 
         if snapshot["success"]:
             st.success(
