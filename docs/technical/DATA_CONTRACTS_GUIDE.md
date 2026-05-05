@@ -110,9 +110,15 @@ July 2025's `235` extracted-versus-canonical row gap was audited as August spill
 Stage B7.3 audits the July-package CSI spill rows that canonicalized to August for August raw and silver traceability.
 All `235` spill identities are traceable under August canonical scope in the current temp DB, while a future August temp-only rehearsal remains separate output-equivalence evidence.
 
+## Stage B8.3 Boundary-Month CSI Carry-Forward Policy
+
+August-only ingestion does not capture July-package CSI rows that canonicalize to August.
+Future carry-forward or adjacent-package reconciliation is required before claiming canonical monthly completeness for boundary-month CSI scope.
+This remains a policy/design boundary only; no runtime carry-forward logic or canonical predicate change is active through Stage B8.3.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B7.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B8.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

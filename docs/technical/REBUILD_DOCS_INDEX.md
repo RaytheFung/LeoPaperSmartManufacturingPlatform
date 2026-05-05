@@ -45,6 +45,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB7_1_JULY_CSI_SPILL_ROW_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_1_JULY_CSI_SPILL_ROW_AUDIT_REPORT.md)
 - [`POSTFYP_STAGEB7_2_CSI_MONTH_ASSIGNMENT_POLICY_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_2_CSI_MONTH_ASSIGNMENT_POLICY_DECISION_REPORT.md)
 - [`POSTFYP_STAGEB7_3_AUGUST_SPILL_TRACEABILITY_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_3_AUGUST_SPILL_TRACEABILITY_AUDIT_REPORT.md)
+- [`POSTFYP_STAGEB8_3_BOUNDARY_MONTH_CSI_CARRY_FORWARD_POLICY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB8_3_BOUNDARY_MONTH_CSI_CARRY_FORWARD_POLICY_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -66,6 +67,7 @@ Stage B7.2 accepts the current first-available timestamp CSI canonical month-ass
 Stage B7.3 audits the July-package CSI spill identities against August canonical scope read-only and proves all `235` spill identities are traceable in August raw and silver surfaces in the current temp DB.
 Stage B8.1 prepares the August 2025 temp-only rehearsal preflight and evidence contract read-only, including source-discovery status, temp DB boundary, planned isolation surfaces, B7.3 spill traceability requirements, abort criteria, and required B8.2 evidence.
 Stage B8.2 runs one August 2025 temp-only clean-baseline backfill rehearsal outside Git, records successful August ETL/materialization evidence, and documents the failed B7.3 spill traceability requirement after August-only ingestion.
+Stage B8.3 decides that timestamp-based CSI canonical semantics should remain, but August completeness cannot silently exclude July-package rows that canonicalize to August; Stage B9 should design controlled carry-forward or adjacent-package reconciliation before broader rehearsal.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
