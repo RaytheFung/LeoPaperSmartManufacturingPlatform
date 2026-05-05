@@ -88,9 +88,15 @@ Stage B6.2 adds a read-only helper, `core.backfill_rehearsal_preflight.build_his
 The helper uses source discovery and compare diagnostics only; it does not run ETL, run canonical materialization, connect to a DB, copy a DB, or write files.
 It prepares the evidence contract for a later temp-only rehearsal while preserving the Stage B5 boundary that source-discovery switching proves source-path behavior only.
 
+## Stage B6.3 July Temp-Only Rehearsal
+
+Stage B6.3 runs the first July 2025 historical backfill rehearsal against a temp DB outside Git only.
+The rehearsal does not promote data, write the original runtime DB, change source-discovery policy, or alter Streamlit/manual ETL behavior.
+Its evidence proves temp-only execution safety and successful July completion, while leaving clean-baseline Bronze/Silver equivalence for a later isolated follow-up.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B6.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B6.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

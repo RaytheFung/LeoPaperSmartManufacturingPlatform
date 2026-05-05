@@ -40,6 +40,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB5_SOURCE_DISCOVERY_DEFAULT_SWITCH_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_SOURCE_DISCOVERY_DEFAULT_SWITCH_CLOSEOUT_REPORT.md)
 - [`POSTFYP_STAGEB6_1_BACKFILL_EQUIVALENCE_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_1_BACKFILL_EQUIVALENCE_AUDIT_REPORT.md)
 - [`POSTFYP_STAGEB6_2_JULY_TEMP_BACKFILL_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_2_JULY_TEMP_BACKFILL_PREFLIGHT_REPORT.md)
+- [`POSTFYP_STAGEB6_3_JULY_TEMP_BACKFILL_REHEARSAL_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_3_JULY_TEMP_BACKFILL_REHEARSAL_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -54,6 +55,7 @@ Stage B5.2 adds a read-only post-switch audit helper and hardens the ETL diagnos
 Stage B5.3 closes out the source-discovery default switch with final read-only evidence, rollback notes, and remaining proof gaps.
 Stage B6.1 audits the historical backfill call chain and defines the ETL output-equivalence evidence required before any temp-only rehearsal.
 Stage B6.2 adds a read-only July 2025 temp-backfill preflight helper and rehearsal evidence contract without running ETL or materialization.
+Stage B6.3 executes the July 2025 rehearsal against a temp DB only and records the successful run plus the remaining clean-baseline equivalence gap.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
