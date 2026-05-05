@@ -38,9 +38,18 @@ The optional `manifest` mode resolves through `core.source_manifest_discovery.re
 This is a guarded integration step only. It does not switch ETL defaults, run ETL, run canonical materialization, or write the runtime database.
 Data-quality rules remain metadata-only and are still not wired into Silver or Gold runtime behavior.
 
+## Stage B4.2 Compare Diagnostic
+
+Stage B4.2 adds `scripts/compare_source_discovery_modes.py`, a read-only diagnostic script/helper for comparing legacy and manifest-backed discovery across July 2025 through March 2026.
+It calls the optional compare mode only, does not run ETL, does not run canonical materialization, and does not write output files or the runtime database.
+March 2026 is treated as an expected blocked/out-of-scope month rather than a failure.
+
+The diagnostic is evidence for a future default-switch decision, not the switch itself.
+Default runtime source discovery remains legacy, and manifest mode is still not exposed in the Streamlit UI.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B4.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

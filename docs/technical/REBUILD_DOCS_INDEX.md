@@ -32,12 +32,14 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md)
 - [`POSTFYP_STAGEB3_SOURCE_DISCOVERY_OPTIONAL_INTEGRATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB3_SOURCE_DISCOVERY_OPTIONAL_INTEGRATION_REPORT.md)
 - [`POSTFYP_STAGEB4_1_SOURCE_DISCOVERY_MODE_GOVERNANCE_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_1_SOURCE_DISCOVERY_MODE_GOVERNANCE_AUDIT_REPORT.md)
+- [`POSTFYP_STAGEB4_2_SOURCE_DISCOVERY_COMPARE_DIAGNOSTIC_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_2_SOURCE_DISCOVERY_COMPARE_DIAGNOSTIC_REPORT.md)
 
-These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B4.1.
+These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B4.2.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
 They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
 Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
 Stage B4.1 audits source-discovery caller impact and governance before any default switch or UI exposure is considered.
+Stage B4.2 adds a read-only compare diagnostic script/helper for extension-month source-discovery evidence without running ETL.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
