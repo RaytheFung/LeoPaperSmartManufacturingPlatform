@@ -94,9 +94,14 @@ Stage B6.3 runs the first July 2025 historical backfill rehearsal against a temp
 The rehearsal does not promote data, write the original runtime DB, change source-discovery policy, or alter Streamlit/manual ETL behavior.
 Its evidence proves temp-only execution safety and successful July completion, while leaving clean-baseline Bronze/Silver equivalence for a later isolated follow-up.
 
+## Stage B6.4 July Baseline Isolation
+
+Stage B6.4 reruns July 2025 once against a temp DB after pruning only clearly July-scoped copied partitions.
+It keeps the original runtime DB and GitHub-safe tree DB-free, and it records duplicate `source_row_hash` evidence without promoting any temp DB or changing active Streamlit/manual ETL behavior.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B6.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B6.4, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

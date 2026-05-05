@@ -25,22 +25,118 @@ from scripts.compare_source_discovery_modes import build_source_discovery_compar
 
 TARGET_MONTH = "July 2025"
 DEFAULT_TEMP_DB_PATH = Path("/tmp/leopaper_stage_b6_3_july_rehearsal/july_rehearsal.db")
+JULY_MONTH_KEY = "2025-07"
+ORIGINAL_RUNTIME_REPO_ROOT = REPO_ROOT.parent / "LeoPaperSmartManufacturingPlatform"
+
+JULY_PRUNE_RULES = {
+    "etl_runs": {
+        "where": "month_processed = ?",
+        "params": (TARGET_MONTH,),
+        "reason": "ETL run ledger row is month-scoped by month_processed.",
+    },
+    "etl_energy_data": {
+        "where": "month_year = ?",
+        "params": (TARGET_MONTH,),
+        "reason": "ETL Energy staging is month-scoped by month_year.",
+    },
+    "etl_csi_data": {
+        "where": "month_year = ?",
+        "params": (TARGET_MONTH,),
+        "reason": "ETL CSI staging is month-scoped by month_year.",
+    },
+    "etl_mes_data": {
+        "where": "month_year = ?",
+        "params": (TARGET_MONTH,),
+        "reason": "ETL MES staging is month-scoped by month_year.",
+    },
+    "raw_energy_hourly": {
+        "where": "substr(raw_timestamp, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Bronze Energy is month-scoped by raw_timestamp.",
+    },
+    "raw_csi_event": {
+        "where": (
+            "COALESCE(substr(raw_start_time, 1, 7), substr(raw_end_time, 1, 7), "
+            "substr(raw_prep_end_time, 1, 7), substr(json_extract(raw_payload_json, '$.\"班次內日期\"'), 1, 7)) = ?"
+        ),
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Bronze CSI uses the same month expression as canonical materialization.",
+    },
+    "raw_mes_report": {
+        "where": "substr(json_extract(raw_payload_json, '$.\"報工時間\"'), 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Bronze MES is month-scoped by report timestamp in raw_payload_json.",
+    },
+    "raw_maintenance_txn": {
+        "where": "substr(raw_transaction_date, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Bronze maintenance is month-scoped by transaction timestamp.",
+    },
+    "energy_meter_hour": {
+        "where": "substr(hour_ts, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Silver Energy is month-scoped by hour_ts.",
+    },
+    "csi_job_event": {
+        "where": (
+            "COALESCE(substr(prod_start_ts, 1, 7), substr(prod_end_ts, 1, 7), "
+            "substr(prep_end_ts, 1, 7), substr(shift_date, 1, 7)) = ?"
+        ),
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Silver CSI uses the same month expression as canonical materialization.",
+    },
+    "mes_report_event": {
+        "where": "substr(report_ts, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Silver MES is month-scoped by report_ts.",
+    },
+    "maintenance_txn_event": {
+        "where": "substr(txn_ts, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Silver maintenance is month-scoped by txn_ts.",
+    },
+    "fact_machine_hour": {
+        "where": "substr(hour_ts, 1, 7) = ?",
+        "params": (JULY_MONTH_KEY,),
+        "reason": "Gold fact table is month-scoped by hour_ts.",
+    },
+    "machine_monthly_presence": {
+        "where": "month_year = ?",
+        "params": (TARGET_MONTH,),
+        "reason": "Machine presence is explicitly month-scoped by month_year.",
+    },
+}
+
+GLOBAL_OR_AMBIGUOUS_TABLE_REASONS = {
+    "machine_inventory": "Global inventory state; last_seen_date is not safe enough for July partition deletion.",
+    "three_way_matches": "Global mapping state; first/last matched dates do not make row deletion safely month-scoped.",
+    "sqlite_sequence": "SQLite internal sequence table.",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run a July 2025 historical backfill rehearsal against a temp DB only.",
     )
-    parser.add_argument("--temp-db-path", type=Path, default=DEFAULT_TEMP_DB_PATH)
+    parser.add_argument("--temp-db-path", type=Path)
     parser.add_argument("--data-root", type=Path, default=get_extended_raw_dataset_root())
     parser.add_argument("--month", default=TARGET_MONTH)
+    parser.add_argument(
+        "--isolate-july-baseline",
+        action="store_true",
+        help="Prune clearly July-scoped temp DB partitions before running the July rehearsal.",
+    )
     args = parser.parse_args(argv)
 
     try:
+        temp_db_path = args.temp_db_path
+        if args.isolate_july_baseline and temp_db_path is None:
+            raise ValueError("--isolate-july-baseline requires explicit --temp-db-path")
         evidence = run_july_temp_backfill_rehearsal(
-            temp_db_path=args.temp_db_path,
+            temp_db_path=temp_db_path or DEFAULT_TEMP_DB_PATH,
             data_root=args.data_root,
             month=args.month,
+            isolate_july_baseline=args.isolate_july_baseline,
         )
     except Exception as exc:
         payload = {
@@ -61,6 +157,7 @@ def run_july_temp_backfill_rehearsal(
     temp_db_path: str | Path,
     data_root: str | Path,
     month: str = TARGET_MONTH,
+    isolate_july_baseline: bool = False,
 ) -> dict[str, Any]:
     temp_db = Path(temp_db_path).expanduser().resolve(strict=False)
     source_root = Path(data_root).expanduser().resolve(strict=False)
@@ -73,6 +170,9 @@ def run_july_temp_backfill_rehearsal(
     started_perf = time.perf_counter()
     pre_stat = _file_stat(temp_db)
     pre_sha256 = _sha256_file(temp_db)
+    isolation_evidence = None
+    if isolate_july_baseline:
+        isolation_evidence = isolate_july_baseline_partitions(temp_db)
 
     pipeline = ETLPipelineModule(db_path=temp_db)
     extraction_capture: dict[str, Any] = {}
@@ -137,6 +237,8 @@ def run_july_temp_backfill_rehearsal(
             "after": {**post_stat, "sha256": post_sha256},
             "table_counts": summarize_temp_db(temp_db),
         },
+        "isolation_evidence": isolation_evidence,
+        "duplicate_idempotence_evidence": inspect_july_source_hash_duplicates(temp_db),
         "runtime_evidence": {
             "started_at_utc": started_at,
             "ended_at_utc": ended_at,
@@ -151,6 +253,119 @@ def run_july_temp_backfill_rehearsal(
             "repo_db_write_allowed": False,
         },
     }
+
+
+def isolate_july_baseline_partitions(db_path: str | Path) -> dict[str, Any]:
+    db = Path(db_path).expanduser().resolve(strict=False)
+    _validate_temp_db_path(db)
+    if not db.exists():
+        raise FileNotFoundError(f"DB path does not exist: {db}")
+
+    conn = sqlite3.connect(db)
+    try:
+        inspected = inspect_temp_db_tables(conn)
+        existing_tables = set(inspected)
+        pruned: dict[str, Any] = {}
+        skipped: dict[str, Any] = {}
+
+        for table_name in sorted(existing_tables):
+            pre_total_count = _count_all_table_rows(conn, table_name)
+            if table_name in JULY_PRUNE_RULES:
+                rule = JULY_PRUNE_RULES[table_name]
+                pre_count = _count_table_rows(conn, table_name, rule["where"], rule["params"])
+                conn.execute(
+                    f"DELETE FROM {table_name} WHERE {rule['where']}",
+                    rule["params"],
+                )
+                post_count = _count_table_rows(conn, table_name, rule["where"], rule["params"])
+                pruned[table_name] = {
+                    "delete_condition": rule["where"],
+                    "params": list(rule["params"]),
+                    "pre_prune_july_count": pre_count,
+                    "post_prune_july_count": post_count,
+                    "pre_total_row_count": pre_total_count,
+                    "post_total_row_count": _count_all_table_rows(conn, table_name),
+                    "deleted_rows": (
+                        pre_count - post_count
+                        if isinstance(pre_count, int) and isinstance(post_count, int)
+                        else None
+                    ),
+                    "reason": rule["reason"],
+                }
+                continue
+
+            skipped[table_name] = {
+                "columns": inspected[table_name],
+                "pre_total_row_count": pre_total_count,
+                "post_total_row_count": pre_total_count,
+                "reason": GLOBAL_OR_AMBIGUOUS_TABLE_REASONS.get(
+                    table_name,
+                    "No conservative July-specific delete predicate is defined for this table.",
+                ),
+            }
+
+        conn.commit()
+        return {
+            "tables_inspected": inspected,
+            "tables_pruned": pruned,
+            "tables_skipped": skipped,
+        }
+    finally:
+        conn.close()
+
+
+def inspect_temp_db_tables(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    tables = [
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").fetchall()
+    ]
+    return {
+        table_name: [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+        for table_name in tables
+    }
+
+
+def inspect_july_source_hash_duplicates(db_path: str | Path) -> dict[str, Any]:
+    db = Path(db_path).expanduser().resolve(strict=False)
+    _validate_temp_db_path(db)
+    conn = sqlite3.connect(db)
+    try:
+        existing_tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+        }
+        results: dict[str, Any] = {}
+        for table_name, rule in JULY_PRUNE_RULES.items():
+            if table_name not in existing_tables:
+                continue
+            columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            if "source_row_hash" not in columns:
+                results[table_name] = {
+                    "has_source_row_hash": False,
+                    "july_duplicate_hash_count": None,
+                }
+                continue
+            duplicate_count = _query_scalar(
+                conn,
+                f"""
+                SELECT COUNT(*)
+                FROM (
+                    SELECT source_row_hash
+                    FROM {table_name}
+                    WHERE {rule['where']}
+                    GROUP BY source_row_hash
+                    HAVING COUNT(*) > 1
+                )
+                """,
+                rule["params"],
+            )
+            results[table_name] = {
+                "has_source_row_hash": True,
+                "july_duplicate_hash_count": duplicate_count,
+            }
+        return results
+    finally:
+        conn.close()
 
 
 def summarize_temp_db(db_path: str | Path) -> dict[str, Any]:
@@ -185,8 +400,9 @@ def summarize_temp_db(db_path: str | Path) -> dict[str, Any]:
             "range_sql": "SELECT MIN(raw_timestamp), MAX(raw_timestamp), SUM(raw_kwh) FROM raw_energy_hourly WHERE substr(raw_timestamp, 1, 7) = '2025-07'",
         },
         "raw_csi_event": {
-            "count_sql": "SELECT COUNT(*) FROM raw_csi_event WHERE substr(raw_start_time, 1, 7) = '2025-07' OR substr(raw_end_time, 1, 7) = '2025-07'",
-            "range_sql": "SELECT MIN(raw_start_time), MAX(raw_end_time), SUM(raw_good_qty) FROM raw_csi_event WHERE substr(raw_start_time, 1, 7) = '2025-07' OR substr(raw_end_time, 1, 7) = '2025-07'",
+            "count_sql": f"SELECT COUNT(*) FROM raw_csi_event WHERE {JULY_PRUNE_RULES['raw_csi_event']['where']}",
+            "params": JULY_PRUNE_RULES["raw_csi_event"]["params"],
+            "range_sql": f"SELECT MIN(raw_start_time), MAX(raw_end_time), SUM(raw_good_qty) FROM raw_csi_event WHERE {JULY_PRUNE_RULES['raw_csi_event']['where']}",
         },
         "raw_mes_report": {
             "count_sql": "SELECT COUNT(*) FROM raw_mes_report WHERE substr(json_extract(raw_payload_json, '$.\"報工時間\"'), 1, 7) = '2025-07'",
@@ -202,8 +418,9 @@ def summarize_temp_db(db_path: str | Path) -> dict[str, Any]:
             "flags_sql": "SELECT COUNT(*) FROM energy_meter_hour WHERE substr(hour_ts, 1, 7) = '2025-07' AND quality_flags_json IS NOT NULL AND TRIM(quality_flags_json) NOT IN ('', '{}')",
         },
         "csi_job_event": {
-            "count_sql": "SELECT COUNT(*) FROM csi_job_event WHERE substr(prod_start_ts, 1, 7) = '2025-07' OR substr(prod_end_ts, 1, 7) = '2025-07'",
-            "range_sql": "SELECT MIN(prod_start_ts), MAX(prod_end_ts), SUM(good_qty) FROM csi_job_event WHERE substr(prod_start_ts, 1, 7) = '2025-07' OR substr(prod_end_ts, 1, 7) = '2025-07'",
+            "count_sql": f"SELECT COUNT(*) FROM csi_job_event WHERE {JULY_PRUNE_RULES['csi_job_event']['where']}",
+            "params": JULY_PRUNE_RULES["csi_job_event"]["params"],
+            "range_sql": f"SELECT MIN(prod_start_ts), MAX(prod_end_ts), SUM(good_qty) FROM csi_job_event WHERE {JULY_PRUNE_RULES['csi_job_event']['where']}",
         },
         "mes_report_event": {
             "count_sql": "SELECT COUNT(*) FROM mes_report_event WHERE substr(report_ts, 1, 7) = '2025-07'",
@@ -315,6 +532,23 @@ def _query_one(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ())
     return list(row) if row else []
 
 
+def _count_table_rows(
+    conn: sqlite3.Connection,
+    table_name: str,
+    where_clause: str,
+    params: tuple[Any, ...] = (),
+) -> Any:
+    return _query_scalar(
+        conn,
+        f"SELECT COUNT(*) FROM {table_name} WHERE {where_clause}",
+        params,
+    )
+
+
+def _count_all_table_rows(conn: sqlite3.Connection, table_name: str) -> Any:
+    return _query_scalar(conn, f"SELECT COUNT(*) FROM {table_name}")
+
+
 def _validate_target_month(month: str) -> None:
     if str(month).strip() != TARGET_MONTH:
         raise ValueError(f"Refusing to run non-July rehearsal month: {month}")
@@ -323,6 +557,8 @@ def _validate_target_month(month: str) -> None:
 def _validate_temp_db_path(db_path: Path) -> None:
     if _path_is_relative_to(db_path, REPO_ROOT):
         raise ValueError(f"Refusing DB path inside repo: {db_path}")
+    if _path_is_relative_to(db_path, ORIGINAL_RUNTIME_REPO_ROOT):
+        raise ValueError(f"Refusing DB path inside original runtime repo: {db_path}")
     if db_path.suffix.lower() not in {".db", ".sqlite", ".sqlite3"}:
         raise ValueError(f"Temp DB path must use a DB suffix: {db_path}")
 
