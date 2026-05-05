@@ -43,6 +43,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB6_3_JULY_TEMP_BACKFILL_REHEARSAL_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_3_JULY_TEMP_BACKFILL_REHEARSAL_REPORT.md)
 - [`POSTFYP_STAGEB6_4_JULY_BASELINE_ISOLATION_IDEMPOTENCE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_4_JULY_BASELINE_ISOLATION_IDEMPOTENCE_REPORT.md)
 - [`POSTFYP_STAGEB7_1_JULY_CSI_SPILL_ROW_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_1_JULY_CSI_SPILL_ROW_AUDIT_REPORT.md)
+- [`POSTFYP_STAGEB7_2_CSI_MONTH_ASSIGNMENT_POLICY_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_2_CSI_MONTH_ASSIGNMENT_POLICY_DECISION_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -60,6 +61,7 @@ Stage B6.2 adds a read-only July 2025 temp-backfill preflight helper and rehears
 Stage B6.3 executes the July 2025 rehearsal against a temp DB only and records the successful run plus the remaining clean-baseline equivalence gap.
 Stage B6.4 isolates and prunes July partitions in a temp-only DB before one July rerun, resolving the B6.3 doubling limitation for canonical Bronze/Silver evidence.
 Stage B7.1 audits the July CSI extracted-versus-canonical row gap read-only and concludes that the `235` excluded rows are legitimate August spill rows outside canonical July scope under the current predicate.
+Stage B7.2 accepts the current first-available timestamp CSI canonical month-assignment policy for Stage B7, documents the extracted-versus-canonical explanation, and requires future multi-month rehearsals to report spill deltas explicitly.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

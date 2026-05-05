@@ -99,9 +99,15 @@ Its evidence proves temp-only execution safety and successful July completion, w
 Stage B6.4 reruns July 2025 once against a temp DB after pruning only clearly July-scoped copied partitions.
 It keeps the original runtime DB and GitHub-safe tree DB-free, and it records duplicate `source_row_hash` evidence without promoting any temp DB or changing active Streamlit/manual ETL behavior.
 
+## Stage B7.2 CSI Canonical Month Assignment
+
+Stage B7.2 accepts the current first-available timestamp CSI canonical month-assignment policy for Stage B7.
+CSI extracted package rows and canonical CSI event rows may differ because canonical month assignment follows timestamp semantics.
+July 2025's `235` extracted-versus-canonical row gap was audited as August spill, not data loss, duplicate/hash contamination, or a runtime predicate mismatch.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B6.4, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B7.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
