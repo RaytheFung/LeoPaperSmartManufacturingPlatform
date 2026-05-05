@@ -291,6 +291,51 @@ def _build_extension_source_availability_dataframe(data_root: Path | str | None 
     return pd.DataFrame(rows)
 
 
+def build_source_discovery_diagnostic_snapshot(data_root: Path | str | None = None) -> dict[str, object]:
+    from scripts.compare_source_discovery_modes import build_source_discovery_compare_diagnostics
+
+    diagnostics = build_source_discovery_compare_diagnostics(data_root=data_root)
+    rows = []
+    for row in diagnostics["rows"]:
+        differences = row.get("differences", [])
+        errors = row.get("errors", {})
+        rows.append(
+            {
+                "Month": row["month_label"],
+                "Legacy Status": str(row["legacy_status"]).title(),
+                "Manifest Status": str(row["manifest_status"]).title(),
+                "Matches": bool(row["matches"]),
+                "Backfill Readiness": _format_source_discovery_status(row.get("backfill_readiness")),
+                "Expected Blocked": bool(row["expected_blocked"]),
+                "Difference Count": len(differences),
+                "Error Count": _count_source_discovery_errors(errors),
+                "OK": bool(row["ok"]),
+            }
+        )
+
+    return {
+        "success": bool(diagnostics["success"]),
+        "data_root": diagnostics["data_root"],
+        "month_count": diagnostics["month_count"],
+        "accepted_month_count": diagnostics["accepted_month_count"],
+        "expected_blocked_month_count": diagnostics["expected_blocked_month_count"],
+        "rows": rows,
+        "raw_rows": diagnostics["rows"],
+    }
+
+
+def _format_source_discovery_status(value: object) -> str:
+    if not value:
+        return "Unknown"
+    return str(value).replace("_", " ").title()
+
+
+def _count_source_discovery_errors(errors: object) -> int:
+    if not isinstance(errors, dict):
+        return 0
+    return sum(1 for payload in errors.values() if payload)
+
+
 def _compare_resolved_source_payloads(
     legacy_payload: dict[str, object],
     manifest_payload: dict[str, object],
@@ -1685,6 +1730,7 @@ def render_etl_page(runtime_mode: str = "standard"):
     
     with tab1:
         _render_extension_source_availability()
+        _render_source_discovery_contract_check()
         if read_only_runtime:
             _render_demo_readonly_upload_gate()
         else:
@@ -1727,6 +1773,38 @@ def _render_extension_source_availability() -> None:
         "Partial months remain backfillable only with the documented flags and exclusions, while blocked months stay out of scope."
     )
     st.dataframe(availability_df, use_container_width=True, hide_index=True)
+
+
+def _render_source_discovery_contract_check() -> None:
+    with st.expander("Reference & Audit: Source Discovery Contract Check", expanded=False):
+        snapshot = build_source_discovery_diagnostic_snapshot()
+        st.caption(
+            "Read-only diagnostic only. This does not change active ETL discovery defaults and does not run ETL. "
+            "It compares legacy extension-month discovery with manifest-backed discovery and does not initialize schema."
+        )
+
+        summary_cols = st.columns(3)
+        with summary_cols[0]:
+            st.metric("Accepted Months", int(snapshot["accepted_month_count"]))
+        with summary_cols[1]:
+            st.metric("Expected Blocked", int(snapshot["expected_blocked_month_count"]))
+        with summary_cols[2]:
+            st.metric("Contract Status", "OK" if snapshot["success"] else "Review")
+
+        if snapshot["success"]:
+            st.success(
+                "Legacy and manifest source discovery match for accepted months; March 2026 remains expected-blocked."
+            )
+        else:
+            st.warning("Source discovery comparison found at least one row that needs review.")
+
+        rows_df = pd.DataFrame(snapshot["rows"])
+        st.dataframe(rows_df, use_container_width=True, hide_index=True)
+
+        review_rows = [row for row in snapshot["raw_rows"] if not row["ok"]]
+        if review_rows:
+            st.markdown("##### Rows Needing Review")
+            st.dataframe(pd.DataFrame(review_rows), use_container_width=True, hide_index=True)
 
 
 def render_upload_section(etl_module):

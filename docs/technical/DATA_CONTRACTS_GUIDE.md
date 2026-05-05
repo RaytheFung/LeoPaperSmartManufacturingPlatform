@@ -47,9 +47,19 @@ March 2026 is treated as an expected blocked/out-of-scope month rather than a fa
 The diagnostic is evidence for a future default-switch decision, not the switch itself.
 Default runtime source discovery remains legacy, and manifest mode is still not exposed in the Streamlit UI.
 
+## Stage B4.3 ETL Diagnostic Surface
+
+Stage B4.3 adds a collapsed Streamlit ETL-page reference expander named `Reference & Audit: Source Discovery Contract Check`.
+The expander displays the B4.2 compare diagnostic as a read-only audit table for July 2025 through March 2026.
+It uses a pure snapshot helper, `modules.etl_module.build_source_discovery_diagnostic_snapshot()`, which reuses `scripts.compare_source_discovery_modes.build_source_discovery_compare_diagnostics()` and does not call Streamlit runtime APIs.
+
+This is a diagnostic surface only.
+It does not add a manifest operational ETL option, does not change the default `discovery_mode`, does not run ETL, does not run canonical materialization, and does not write `manufacturing_data.db`.
+March 2026 remains expected blocked/out-of-scope in the displayed diagnostic.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B4.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B4.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
