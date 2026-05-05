@@ -64,6 +64,7 @@ Stage B6.4 isolates and prunes July partitions in a temp-only DB before one July
 Stage B7.1 audits the July CSI extracted-versus-canonical row gap read-only and concludes that the `235` excluded rows are legitimate August spill rows outside canonical July scope under the current predicate.
 Stage B7.2 accepts the current first-available timestamp CSI canonical month-assignment policy for Stage B7, documents the extracted-versus-canonical explanation, and requires future multi-month rehearsals to report spill deltas explicitly.
 Stage B7.3 audits the July-package CSI spill identities against August canonical scope read-only and proves all `235` spill identities are traceable in August raw and silver surfaces in the current temp DB.
+Stage B8.1 prepares the August 2025 temp-only rehearsal preflight and evidence contract read-only, including source-discovery status, temp DB boundary, planned isolation surfaces, B7.3 spill traceability requirements, abort criteria, and required B8.2 evidence.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

@@ -50,12 +50,63 @@ class BackfillRehearsalPreflightTests(unittest.TestCase):
         self.assertTrue(any("fact_machine_hour" in item for item in plan["required_post_run_evidence"]))
         self.assertTrue(plan["proof_gaps"])
 
+    def test_august_2025_plan_builds_with_placeholder_sources(self):
+        plan = build_historical_backfill_preflight_plan("August 2025", data_root=self.data_root)
+
+        self.assertEqual(plan["target_month"], "August 2025")
+        self.assertEqual(plan["target_month_key"], "2025-08")
+        self.assertTrue(plan["accepted_for_rehearsal"])
+        self.assertFalse(plan["blocked"])
+        self.assertEqual(plan["expected_source_families"], {"energy": "partial", "csi": "complete", "mes": "complete"})
+        self.assertEqual(plan["missing_source_files"], [])
+
+    def test_august_2025_plan_reports_auto_manifest_backed_source_discovery(self):
+        plan = build_historical_backfill_preflight_plan("August 2025", data_root=self.data_root)
+
+        self.assertEqual(plan["source_discovery_default_policy"], "auto / manifest-backed")
+        self.assertEqual(plan["default_resolver_mode"], "auto")
+        self.assertEqual(plan["compare_diagnostic_status"]["status"], "match")
+        self.assertEqual(plan["compare_diagnostic_status"]["backfill_readiness"], "ready_with_flags")
+        self.assertTrue(plan["compare_diagnostic_status"]["ok"])
+
+    def test_august_2025_plan_includes_spill_row_traceability_requirement(self):
+        plan = build_historical_backfill_preflight_plan("August 2025", data_root=self.data_root)
+        requirement = plan["spill_row_traceability_requirement"]
+
+        self.assertTrue(requirement["required"])
+        self.assertEqual(requirement["source_stage"], "B7.3")
+        self.assertEqual(requirement["expected_spill_identity_count"], 235)
+        self.assertEqual(requirement["required_raw_unmatched_count"], 0)
+        self.assertEqual(requirement["required_silver_unmatched_count"], 0)
+        self.assertTrue(any("spill identity capture" in item for item in plan["required_post_run_evidence"]))
+
+    def test_august_2025_plan_includes_temp_boundary_and_prune_surfaces(self):
+        plan = build_historical_backfill_preflight_plan("August 2025", data_root=self.data_root)
+
+        self.assertEqual(
+            plan["planned_temp_db_path"],
+            "/tmp/leopaper_stage_b8_2_august_rehearsal/august_rehearsal.db",
+        )
+        self.assertTrue(plan["temp_db_required"])
+        self.assertFalse(plan["live_db_write_allowed"])
+        self.assertFalse(plan["repo_db_write_allowed"])
+        self.assertTrue(any(item["surface"] == "raw_csi_event" for item in plan["planned_isolation_prune_surfaces"]))
+        self.assertTrue(any(item["surface"] == "fact_machine_hour" for item in plan["planned_isolation_prune_surfaces"]))
+
     def test_plan_does_not_create_db_files(self):
         before_db_files = set(self.data_root.glob("*.db"))
 
         build_historical_backfill_preflight_plan(data_root=self.data_root)
 
         after_db_files = set(self.data_root.glob("*.db"))
+        self.assertEqual(after_db_files, before_db_files)
+
+    def test_august_2025_plan_does_not_create_db_files(self):
+        before_db_files = set(self.data_root.rglob("*.db"))
+
+        build_historical_backfill_preflight_plan("August 2025", data_root=self.data_root)
+
+        after_db_files = set(self.data_root.rglob("*.db"))
         self.assertEqual(after_db_files, before_db_files)
 
     def test_plan_does_not_invoke_etl_backfill_or_materialization(self):
