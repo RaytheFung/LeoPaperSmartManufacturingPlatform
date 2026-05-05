@@ -82,9 +82,15 @@ The final policy is still `auto`: July 2025 through February 2026 extension mont
 The closeout evidence is read-only and source-discovery-only.
 It does not prove ETL output equivalence or canonical materialization equivalence, and data-quality rules remain metadata-only.
 
+## Stage B6.2 July Temp-Backfill Preflight
+
+Stage B6.2 adds a read-only helper, `core.backfill_rehearsal_preflight.build_historical_backfill_preflight_plan()`, for planning a future July 2025 temp-only historical backfill rehearsal.
+The helper uses source discovery and compare diagnostics only; it does not run ETL, run canonical materialization, connect to a DB, copy a DB, or write files.
+It prepares the evidence contract for a later temp-only rehearsal while preserving the Stage B5 boundary that source-discovery switching proves source-path behavior only.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B5.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B6.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
