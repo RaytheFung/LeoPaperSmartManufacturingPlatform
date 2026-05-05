@@ -74,9 +74,17 @@ It reports `default_policy: auto`, accepted extension months using manifest-back
 The ETL diagnostic expander now states the active default policy directly and displays a low-prominence policy audit table alongside the legacy-vs-manifest comparison evidence.
 This audit is source-discovery evidence only; it still does not run ETL, run canonical materialization, write the database, or prove ETL output/materialization equivalence.
 
+## Stage B5.3 Source Discovery Switch Closeout
+
+Stage B5.3 closes the Stage B5 source-discovery default switch for accepted extension historical source resolution only.
+The final policy is still `auto`: July 2025 through February 2026 extension months default to manifest-backed discovery, January 2025 through June 2025 remain legacy, March 2026 remains blocked, and manual upload behavior remains unchanged.
+
+The closeout evidence is read-only and source-discovery-only.
+It does not prove ETL output equivalence or canonical materialization equivalence, and data-quality rules remain metadata-only.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B5.2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B5.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
