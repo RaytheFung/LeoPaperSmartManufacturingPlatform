@@ -34,14 +34,16 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB4_1_SOURCE_DISCOVERY_MODE_GOVERNANCE_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_1_SOURCE_DISCOVERY_MODE_GOVERNANCE_AUDIT_REPORT.md)
 - [`POSTFYP_STAGEB4_2_SOURCE_DISCOVERY_COMPARE_DIAGNOSTIC_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_2_SOURCE_DISCOVERY_COMPARE_DIAGNOSTIC_REPORT.md)
 - [`POSTFYP_STAGEB4_3_ETL_SOURCE_DISCOVERY_DIAGNOSTIC_SURFACE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_3_ETL_SOURCE_DISCOVERY_DIAGNOSTIC_SURFACE_REPORT.md)
+- [`POSTFYP_STAGEB4_4_MANIFEST_DEFAULT_SWITCH_DECISION_PACK.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB4_4_MANIFEST_DEFAULT_SWITCH_DECISION_PACK.md)
 
-These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B4.3.
+These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B4.4.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
 They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
 Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
 Stage B4.1 audits source-discovery caller impact and governance before any default switch or UI exposure is considered.
 Stage B4.2 adds a read-only compare diagnostic script/helper for extension-month source-discovery evidence without running ETL.
 Stage B4.3 exposes that diagnostic on the ETL page as a collapsed read-only reference surface without adding manifest as an operational ETL option.
+Stage B4.4 records the decision pack for a possible future narrow manifest default switch, including approval criteria, abort criteria, rollback, runtime smoke requirements, and remaining proof gaps.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
