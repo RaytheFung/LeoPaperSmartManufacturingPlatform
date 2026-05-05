@@ -29,6 +29,7 @@ from core.runtime_paths import (
     get_raw_dataset_root,
     get_repo_root,
 )
+from core.source_manifest_discovery import resolve_manifest_month_sources
 
 
 MONTH_NAME_OPTIONS = [
@@ -290,6 +291,41 @@ def _build_extension_source_availability_dataframe(data_root: Path | str | None 
     return pd.DataFrame(rows)
 
 
+def _compare_resolved_source_payloads(
+    legacy_payload: dict[str, object],
+    manifest_payload: dict[str, object],
+) -> dict[str, object]:
+    compared_fields = (
+        "energy_files",
+        "csi_file",
+        "mes_file",
+        "family_status",
+        "backfill_readiness",
+    )
+    differences = []
+    for field_name in compared_fields:
+        legacy_value = legacy_payload.get(field_name)
+        manifest_value = manifest_payload.get(field_name)
+        if legacy_value != manifest_value:
+            differences.append(
+                {
+                    "field": field_name,
+                    "legacy": legacy_value,
+                    "manifest": manifest_value,
+                }
+            )
+    return {"matches": not differences, "differences": differences}
+
+
+def _source_discovery_error_payload(mode: str, exc: Exception) -> dict[str, object]:
+    return {
+        "mode": mode,
+        "error_type": exc.__class__.__name__,
+        "message": str(exc),
+        "blocked": "blocked" in str(exc).lower(),
+    }
+
+
 class ETLPipelineModule:
     HISTORICAL_MONTH_FILE_MAPPINGS = {
         "January": {
@@ -444,8 +480,30 @@ class ETLPipelineModule:
             resolved[month_year] = _resolve_extension_source_mapping(month_year, data_root=data_root)
         return resolved
 
-    def resolve_historical_month_sources(self, month_year, data_root=None):
+    def resolve_historical_month_sources(self, month_year, data_root=None, *, discovery_mode: str = "legacy"):
         month_key = month_year.strip()
+        normalized_mode = str(discovery_mode or "legacy").strip().lower()
+        if normalized_mode not in {"legacy", "manifest", "compare"}:
+            raise ValueError(
+                "Unsupported source discovery mode "
+                f"{discovery_mode!r}; expected legacy, manifest, or compare."
+            )
+
+        if normalized_mode == "manifest":
+            manifest_data_root = data_root if data_root is not None else _resolve_default_data_root_for_month(month_key)
+            source_files = resolve_manifest_month_sources(
+                month_key,
+                data_root=manifest_data_root,
+            )
+            source_files["source_discovery_mode"] = "manifest"
+            return source_files
+
+        if normalized_mode == "compare":
+            return self._resolve_historical_month_sources_compare(month_key, data_root=data_root)
+
+        return self._resolve_historical_month_sources_legacy(month_key, data_root=data_root)
+
+    def _resolve_historical_month_sources_legacy(self, month_key, data_root=None):
         historical_mappings = self.get_historical_month_file_mappings(data_root)
         if month_key not in historical_mappings:
             raise ValueError(f"No historical source mapping is defined for {month_key}.")
@@ -472,6 +530,57 @@ class ETLPipelineModule:
             )
 
         return source_files
+
+    def _resolve_historical_month_sources_compare(self, month_key, data_root=None):
+        legacy_payload = None
+        manifest_payload = None
+        legacy_error = None
+        manifest_error = None
+
+        try:
+            legacy_payload = self._resolve_historical_month_sources_legacy(month_key, data_root=data_root)
+        except Exception as exc:
+            legacy_error = _source_discovery_error_payload("legacy", exc)
+
+        try:
+            manifest_data_root = data_root if data_root is not None else _resolve_default_data_root_for_month(month_key)
+            manifest_payload = resolve_manifest_month_sources(month_key, data_root=manifest_data_root)
+        except Exception as exc:
+            manifest_error = _source_discovery_error_payload("manifest", exc)
+
+        if legacy_payload is not None and manifest_payload is not None:
+            comparison = _compare_resolved_source_payloads(legacy_payload, manifest_payload)
+            result = dict(legacy_payload)
+            result["source_discovery_mode"] = "compare"
+            result["manifest_equivalence"] = comparison
+            return result
+
+        equivalence = {
+            "matches": False,
+            "differences": [],
+            "legacy_error": legacy_error,
+            "manifest_error": manifest_error,
+        }
+        if legacy_error and manifest_error:
+            equivalence["both_blocked"] = bool(legacy_error.get("blocked") and manifest_error.get("blocked"))
+
+        if legacy_payload is not None:
+            result = dict(legacy_payload)
+            result["source_discovery_mode"] = "compare"
+            result["manifest_equivalence"] = equivalence
+            return result
+
+        return {
+            "dataset_root": str(data_root) if data_root is not None else str(_resolve_default_data_root_for_month(month_key)),
+            "energy_files": [],
+            "csi_file": None,
+            "mes_file": None,
+            "family_status": {},
+            "notes": [],
+            "backfill_readiness": "blocked" if (legacy_error or manifest_error) else "unknown",
+            "source_discovery_mode": "compare",
+            "manifest_equivalence": equivalence,
+        }
 
     def build_extension_source_availability(self, data_root=None):
         return _build_extension_source_availability_dataframe(data_root=data_root)

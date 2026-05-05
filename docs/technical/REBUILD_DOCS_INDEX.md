@@ -30,10 +30,12 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB0_DATABASE_BOUNDARY_AND_SAFE_WORKTREE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB0_DATABASE_BOUNDARY_AND_SAFE_WORKTREE_REPORT.md)
 - [`POSTFYP_STAGEB1_DATA_CONTRACT_FOUNDATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB1_DATA_CONTRACT_FOUNDATION_REPORT.md)
 - [`POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md)
+- [`POSTFYP_STAGEB3_SOURCE_DISCOVERY_OPTIONAL_INTEGRATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB3_SOURCE_DISCOVERY_OPTIONAL_INTEGRATION_REPORT.md)
 
-These reports backfill the post-FYP product-hardening evidence ledger for Stage A through Stage B2.
+These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
-They are evidence records for baseline triage, safe-tree setup, data-contract foundation, and source-discovery equivalence; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
+They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
+Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

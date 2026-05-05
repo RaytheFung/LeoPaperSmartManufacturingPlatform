@@ -29,9 +29,18 @@ These helpers can resolve manifest-backed source paths under an explicitly suppl
 This is an equivalence layer only. Active ETL, canonical materialization, Streamlit runtime defaults, Silver normalization, Gold fact building, ML training, and model artifacts remain unchanged.
 `2026-03` remains blocked and out of canonical scope even though grouped source workbooks can contain March rows.
 
+## Stage B3 Optional ETL Resolver Integration
+
+Stage B3 integrates manifest-backed source discovery into `ETLPipelineModule.resolve_historical_month_sources()` as an optional `discovery_mode`.
+The default remains `legacy`, so existing callers and Streamlit runtime behavior continue to use the current hard-coded source discovery path.
+The optional `manifest` mode resolves through `core.source_manifest_discovery.resolve_manifest_month_sources()`, while `compare` mode runs both paths and returns the legacy operational payload with an explicit equivalence diagnostic.
+
+This is a guarded integration step only. It does not switch ETL defaults, run ETL, run canonical materialization, or write the runtime database.
+Data-quality rules remain metadata-only and are still not wired into Silver or Gold runtime behavior.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B2 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
