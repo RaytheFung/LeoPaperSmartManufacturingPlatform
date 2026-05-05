@@ -65,6 +65,7 @@ Stage B7.1 audits the July CSI extracted-versus-canonical row gap read-only and 
 Stage B7.2 accepts the current first-available timestamp CSI canonical month-assignment policy for Stage B7, documents the extracted-versus-canonical explanation, and requires future multi-month rehearsals to report spill deltas explicitly.
 Stage B7.3 audits the July-package CSI spill identities against August canonical scope read-only and proves all `235` spill identities are traceable in August raw and silver surfaces in the current temp DB.
 Stage B8.1 prepares the August 2025 temp-only rehearsal preflight and evidence contract read-only, including source-discovery status, temp DB boundary, planned isolation surfaces, B7.3 spill traceability requirements, abort criteria, and required B8.2 evidence.
+Stage B8.2 runs one August 2025 temp-only clean-baseline backfill rehearsal outside Git, records successful August ETL/materialization evidence, and documents the failed B7.3 spill traceability requirement after August-only ingestion.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
