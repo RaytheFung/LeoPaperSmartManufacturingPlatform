@@ -25,6 +25,16 @@ Use this set together with the living status file when re-entering the repo afte
 - [`FINAL_STAGE_SYNC_STATUS.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/FINAL_STAGE_SYNC_STATUS.md)
   This is the shared final-stage sync note for user/Codex/reviewer alignment, including the accepted baseline, externalized archival decisions, unresolved clutter, the ready-to-use `Task6 UI polish & demo freeze` prompt, and the pre-demo vs post-demo roadmap split.
 
+## Post-FYP Product Refinement Reports
+- [`POSTFYP_STAGEA_BASELINE_SYNC_AND_TRIAGE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEA_BASELINE_SYNC_AND_TRIAGE_REPORT.md)
+- [`POSTFYP_STAGEB0_DATABASE_BOUNDARY_AND_SAFE_WORKTREE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB0_DATABASE_BOUNDARY_AND_SAFE_WORKTREE_REPORT.md)
+- [`POSTFYP_STAGEB1_DATA_CONTRACT_FOUNDATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB1_DATA_CONTRACT_FOUNDATION_REPORT.md)
+- [`POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB2_SOURCE_DISCOVERY_EQUIVALENCE_REPORT.md)
+
+These reports backfill the post-FYP product-hardening evidence ledger for Stage A through Stage B2.
+Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
+They are evidence records for baseline triage, safe-tree setup, data-contract foundation, and source-discovery equivalence; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
+
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
 - [`REBUILD_ROADMAP_AND_TODO.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_ROADMAP_AND_TODO.md)
