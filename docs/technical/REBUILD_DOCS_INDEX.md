@@ -38,6 +38,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB5_1_EXTENSION_MANIFEST_DEFAULT_SWITCH_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_1_EXTENSION_MANIFEST_DEFAULT_SWITCH_REPORT.md)
 - [`POSTFYP_STAGEB5_2_POST_SWITCH_AUDIT_AND_DIAGNOSTICS_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_2_POST_SWITCH_AUDIT_AND_DIAGNOSTICS_REPORT.md)
 - [`POSTFYP_STAGEB5_SOURCE_DISCOVERY_DEFAULT_SWITCH_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB5_SOURCE_DISCOVERY_DEFAULT_SWITCH_CLOSEOUT_REPORT.md)
+- [`POSTFYP_STAGEB6_1_BACKFILL_EQUIVALENCE_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB6_1_BACKFILL_EQUIVALENCE_AUDIT_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -50,6 +51,7 @@ Stage B4.4 records the decision pack for a possible future narrow manifest defau
 Stage B5.1 switches the historical resolver default to `auto`, using manifest-backed discovery for accepted extension months while keeping Jan-Jun and manual upload/runtime ETL behavior unchanged.
 Stage B5.2 adds a read-only post-switch audit helper and hardens the ETL diagnostic wording so the active default policy is visible without running ETL.
 Stage B5.3 closes out the source-discovery default switch with final read-only evidence, rollback notes, and remaining proof gaps.
+Stage B6.1 audits the historical backfill call chain and defines the ETL output-equivalence evidence required before any temp-only rehearsal.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
