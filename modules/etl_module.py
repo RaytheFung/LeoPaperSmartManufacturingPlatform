@@ -525,21 +525,27 @@ class ETLPipelineModule:
             resolved[month_year] = _resolve_extension_source_mapping(month_year, data_root=data_root)
         return resolved
 
-    def resolve_historical_month_sources(self, month_year, data_root=None, *, discovery_mode: str = "legacy"):
+    def resolve_historical_month_sources(self, month_year, data_root=None, *, discovery_mode: str = "auto"):
         month_key = month_year.strip()
-        normalized_mode = str(discovery_mode or "legacy").strip().lower()
-        if normalized_mode not in {"legacy", "manifest", "compare"}:
+        normalized_mode = str(discovery_mode or "auto").strip().lower()
+        if normalized_mode not in {"auto", "legacy", "manifest", "compare"}:
             raise ValueError(
                 "Unsupported source discovery mode "
-                f"{discovery_mode!r}; expected legacy, manifest, or compare."
+                f"{discovery_mode!r}; expected auto, legacy, manifest, or compare."
             )
 
+        if normalized_mode == "auto":
+            if month_key in EXTENSION_MONTH_SOURCE_MAPPINGS:
+                extension_mapping = _resolve_extension_source_mapping(month_key, data_root=data_root)
+                if extension_mapping.get("backfill_readiness") == "blocked":
+                    return self._resolve_historical_month_sources_legacy(month_key, data_root=data_root)
+                manifest_sources = self._resolve_historical_month_sources_manifest(month_key, data_root=data_root)
+                manifest_sources["source_discovery_mode"] = "auto_manifest"
+                return manifest_sources
+            return self._resolve_historical_month_sources_legacy(month_key, data_root=data_root)
+
         if normalized_mode == "manifest":
-            manifest_data_root = data_root if data_root is not None else _resolve_default_data_root_for_month(month_key)
-            source_files = resolve_manifest_month_sources(
-                month_key,
-                data_root=manifest_data_root,
-            )
+            source_files = self._resolve_historical_month_sources_manifest(month_key, data_root=data_root)
             source_files["source_discovery_mode"] = "manifest"
             return source_files
 
@@ -547,6 +553,13 @@ class ETLPipelineModule:
             return self._resolve_historical_month_sources_compare(month_key, data_root=data_root)
 
         return self._resolve_historical_month_sources_legacy(month_key, data_root=data_root)
+
+    def _resolve_historical_month_sources_manifest(self, month_key, data_root=None):
+        manifest_data_root = data_root if data_root is not None else _resolve_default_data_root_for_month(month_key)
+        return resolve_manifest_month_sources(
+            month_key,
+            data_root=manifest_data_root,
+        )
 
     def _resolve_historical_month_sources_legacy(self, month_key, data_root=None):
         historical_mappings = self.get_historical_month_file_mappings(data_root)

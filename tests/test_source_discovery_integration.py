@@ -13,30 +13,29 @@ class SourceDiscoveryIntegrationTests(unittest.TestCase):
         self._create_placeholder_sources()
         self.pipeline = ETLPipelineModule(db_path=self.extension_root / "stage_b3.db")
 
-    def test_default_resolution_remains_legacy_for_july_2025(self):
+    def test_default_resolution_uses_auto_manifest_for_july_2025(self):
         source_files = self.pipeline.resolve_historical_month_sources(
             "July 2025",
             data_root=self.extension_root,
         )
 
-        self.assertNotIn("source_discovery_mode", source_files)
+        self.assertEqual(source_files["source_discovery_mode"], "auto_manifest")
         self.assertEqual(source_files["backfill_readiness"], "ready")
         self.assertTrue(source_files["csi_file"].endswith(".xls"))
         self.assertIn("能耗、費用報表__2025.7.xlsx", source_files["energy_files"][0])
         self.assertTrue(source_files["mes_file"].endswith("2026年2月28日.xlsx"))
 
-    def test_explicit_legacy_mode_equals_default(self):
-        default_sources = self.pipeline.resolve_historical_month_sources(
-            "July 2025",
-            data_root=self.extension_root,
-        )
+    def test_explicit_legacy_mode_still_resolves_july_2025(self):
         legacy_sources = self.pipeline.resolve_historical_month_sources(
             "July 2025",
             data_root=self.extension_root,
             discovery_mode="legacy",
         )
 
-        self.assertEqual(legacy_sources, default_sources)
+        self.assertNotIn("source_discovery_mode", legacy_sources)
+        self.assertEqual(legacy_sources["backfill_readiness"], "ready")
+        self.assertTrue(legacy_sources["csi_file"].endswith(".xls"))
+        self.assertIn("能耗、費用報表__2025.7.xlsx", legacy_sources["energy_files"][0])
 
     def test_manifest_mode_returns_equivalent_july_source_files(self):
         legacy_sources = self.pipeline.resolve_historical_month_sources(

@@ -57,9 +57,18 @@ This is a diagnostic surface only.
 It does not add a manifest operational ETL option, does not change the default `discovery_mode`, does not run ETL, does not run canonical materialization, and does not write `manufacturing_data.db`.
 March 2026 remains expected blocked/out-of-scope in the displayed diagnostic.
 
+## Stage B5.1 Extension-Month Manifest Default
+
+Stage B5.1 changes `ETLPipelineModule.resolve_historical_month_sources()` default source-discovery policy from `legacy` to `auto`.
+In `auto` mode, accepted extension months July 2025 through February 2026 resolve through manifest-backed discovery by default, while the initial January 2025 through June 2025 historical path remains legacy.
+Explicit `legacy`, `manifest`, and `compare` modes remain available for rollback, diagnostics, and tests.
+
+This is a narrow historical-source resolver default only.
+Manual upload/runtime ETL behavior is unchanged, no Streamlit operational manifest selector is added, March 2026 remains blocked, and data-quality rules remain metadata-only.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Stage B4.3 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Stage B5.1 still does not wire these rules into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
