@@ -105,9 +105,14 @@ Stage B7.2 accepts the current first-available timestamp CSI canonical month-ass
 CSI extracted package rows and canonical CSI event rows may differ because canonical month assignment follows timestamp semantics.
 July 2025's `235` extracted-versus-canonical row gap was audited as August spill, not data loss, duplicate/hash contamination, or a runtime predicate mismatch.
 
+## Stage B7.3 August Spill Traceability
+
+Stage B7.3 audits the July-package CSI spill rows that canonicalized to August for August raw and silver traceability.
+All `235` spill identities are traceable under August canonical scope in the current temp DB, while a future August temp-only rehearsal remains separate output-equivalence evidence.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B7.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B7.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
