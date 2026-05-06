@@ -153,9 +153,16 @@ Stage B12.3 adds a temp-only audit workflow rehearsal script in `scripts/rehears
 The rehearsal creates an audit DB under `/tmp`, applies the B12.1 schema, inserts representative November 2025 -> December 2025 audit records, validates workflow counts, verifies backup checksum evidence, and validates a restored backup copy.
 No live DB migration has been run. Live/shared DB promotion remains a separate approval stage.
 
+## Stage B13 Trial Readiness DB Migration Decision
+
+Stage B13 defers live/shared DB migration before the first controlled refined product trial.
+The controlled trial should use the local runtime DB boundary and documented temp-only evidence rather than promoting a temp DB or creating live audit tables.
+CSI carry-forward remains disabled-by-default and should be presented as validated governance/preflight capability, not active runtime behavior.
+The next approved boundary is Stage C active-vs-legacy cleanup and trial packaging.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B12.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B13, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
