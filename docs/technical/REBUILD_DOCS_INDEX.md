@@ -52,6 +52,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB10_1_CSI_BOUNDARY_CANDIDATE_INVENTORY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_1_CSI_BOUNDARY_CANDIDATE_INVENTORY_REPORT.md)
 - [`POSTFYP_STAGEB10_2_NOVEMBER_DECEMBER_CARRY_FORWARD_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_2_NOVEMBER_DECEMBER_CARRY_FORWARD_PREFLIGHT_REPORT.md)
 - [`POSTFYP_STAGEB10_3_NOVEMBER_DECEMBER_BRONZE_HASH_OVERLAP_PROOF_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_3_NOVEMBER_DECEMBER_BRONZE_HASH_OVERLAP_PROOF_REPORT.md)
+- [`POSTFYP_STAGEB10_4_NOVEMBER_DECEMBER_SOURCE_HASH_GAP_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_4_NOVEMBER_DECEMBER_SOURCE_HASH_GAP_DECISION_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -80,6 +81,7 @@ Stage B9.3 defines the carry-forward adoption design and review gate, including 
 Stage B10.1 inventories accepted extension CSI source packages read-only, finds additional forward boundary candidates, and recommends November 2025 package to December 2025 canonical scope as the next B10.2 preflight target without changing runtime behavior.
 Stage B10.2 builds the November-to-December read-only carry-forward preflight, reproduces the `142` candidates, finds `7` workbook-level December overlaps, and recommends Bronze/hash overlap proof before any temp-only reconciliation.
 Stage B10.3 proves the `7` workbook-level overlaps are not present in December Bronze/Silver target scope, plans all `142` candidates as include candidates, but blocks B10.4 execution until `15` source-row-hash gaps have an approved fallback or proof.
+Stage B10.4 resolves the `15` source-row-hash gaps read-only: `8` recover source hashes through null-equivalent matching, `7` become target duplicates to skip, `0` require stable-identity fallback, and B10.5 should use a `135` include / `7` skip / `0` block plan.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
