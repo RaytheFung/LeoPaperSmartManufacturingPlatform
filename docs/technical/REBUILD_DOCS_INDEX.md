@@ -50,6 +50,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB9_2_CSI_CARRY_FORWARD_RECONCILIATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB9_2_CSI_CARRY_FORWARD_RECONCILIATION_REPORT.md)
 - [`POSTFYP_STAGEB9_3_CSI_CARRY_FORWARD_ADOPTION_GATE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB9_3_CSI_CARRY_FORWARD_ADOPTION_GATE_REPORT.md)
 - [`POSTFYP_STAGEB10_1_CSI_BOUNDARY_CANDIDATE_INVENTORY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_1_CSI_BOUNDARY_CANDIDATE_INVENTORY_REPORT.md)
+- [`POSTFYP_STAGEB10_2_NOVEMBER_DECEMBER_CARRY_FORWARD_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_2_NOVEMBER_DECEMBER_CARRY_FORWARD_PREFLIGHT_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -76,6 +77,7 @@ Stage B9.1 adds a read-only carry-forward preflight helper for August 2025 CSI b
 Stage B9.2 runs a temp-only carry-forward reconciliation rehearsal, inserts the `235` July-package August-canonical CSI rows into a copied temp DB, refreshes August materialization, proves `235/235` raw and silver traceability, and keeps runtime behavior unchanged.
 Stage B9.3 defines the carry-forward adoption design and review gate, including provenance, duplicate-prevention, source-selection, runtime adoption, and live/shared DB promotion contracts without changing runtime behavior.
 Stage B10.1 inventories accepted extension CSI source packages read-only, finds additional forward boundary candidates, and recommends November 2025 package to December 2025 canonical scope as the next B10.2 preflight target without changing runtime behavior.
+Stage B10.2 builds the November-to-December read-only carry-forward preflight, reproduces the `142` candidates, finds `7` workbook-level December overlaps, and recommends Bronze/hash overlap proof before any temp-only reconciliation.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
