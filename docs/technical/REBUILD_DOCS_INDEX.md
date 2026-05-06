@@ -47,6 +47,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB7_3_AUGUST_SPILL_TRACEABILITY_AUDIT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB7_3_AUGUST_SPILL_TRACEABILITY_AUDIT_REPORT.md)
 - [`POSTFYP_STAGEB8_3_BOUNDARY_MONTH_CSI_CARRY_FORWARD_POLICY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB8_3_BOUNDARY_MONTH_CSI_CARRY_FORWARD_POLICY_REPORT.md)
 - [`POSTFYP_STAGEB9_1_CSI_CARRY_FORWARD_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB9_1_CSI_CARRY_FORWARD_PREFLIGHT_REPORT.md)
+- [`POSTFYP_STAGEB9_2_CSI_CARRY_FORWARD_RECONCILIATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB9_2_CSI_CARRY_FORWARD_RECONCILIATION_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -70,6 +71,7 @@ Stage B8.1 prepares the August 2025 temp-only rehearsal preflight and evidence c
 Stage B8.2 runs one August 2025 temp-only clean-baseline backfill rehearsal outside Git, records successful August ETL/materialization evidence, and documents the failed B7.3 spill traceability requirement after August-only ingestion.
 Stage B8.3 decides that timestamp-based CSI canonical semantics should remain, but August completeness cannot silently exclude July-package rows that canonicalize to August; Stage B9 should design controlled carry-forward or adjacent-package reconciliation before broader rehearsal.
 Stage B9.1 adds a read-only carry-forward preflight helper for August 2025 CSI boundary rows, identifies the `235` July-package candidates, proves zero current-package overlap against the B8.2 August-only temp DB, and keeps runtime behavior unchanged.
+Stage B9.2 runs a temp-only carry-forward reconciliation rehearsal, inserts the `235` July-package August-canonical CSI rows into a copied temp DB, refreshes August materialization, proves `235/235` raw and silver traceability, and keeps runtime behavior unchanged.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
