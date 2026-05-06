@@ -54,6 +54,8 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB10_3_NOVEMBER_DECEMBER_BRONZE_HASH_OVERLAP_PROOF_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_3_NOVEMBER_DECEMBER_BRONZE_HASH_OVERLAP_PROOF_REPORT.md)
 - [`POSTFYP_STAGEB10_4_NOVEMBER_DECEMBER_SOURCE_HASH_GAP_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_4_NOVEMBER_DECEMBER_SOURCE_HASH_GAP_DECISION_REPORT.md)
 - [`POSTFYP_STAGEB10_5_NOVEMBER_DECEMBER_CARRY_FORWARD_RECONCILIATION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_5_NOVEMBER_DECEMBER_CARRY_FORWARD_RECONCILIATION_REPORT.md)
+- [`POSTFYP_STAGEB10_CSI_CARRY_FORWARD_GENERALIZATION_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_CSI_CARRY_FORWARD_GENERALIZATION_CLOSEOUT_REPORT.md)
+- [`POSTFYP_STAGEB11_1_CSI_CARRY_FORWARD_RUNTIME_HOOK_DESIGN_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_1_CSI_CARRY_FORWARD_RUNTIME_HOOK_DESIGN_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -84,6 +86,8 @@ Stage B10.2 builds the November-to-December read-only carry-forward preflight, r
 Stage B10.3 proves the `7` workbook-level overlaps are not present in December Bronze/Silver target scope, plans all `142` candidates as include candidates, but blocks B10.4 execution until `15` source-row-hash gaps have an approved fallback or proof.
 Stage B10.4 resolves the `15` source-row-hash gaps read-only: `8` recover source hashes through null-equivalent matching, `7` become target duplicates to skip, `0` require stable-identity fallback, and B10.5 should use a `135` include / `7` skip / `0` block plan.
 Stage B10.5 executes that approved November-to-December plan in a temp DB only: the December baseline is rebuilt, `135` carry-forward raw rows are inserted and materialized, `7` duplicates are skipped, raw/silver traceability is `135/135`, duplicate groups stay `0`, and the original runtime DB remains unchanged.
+Stage B10 closeout consolidates the July-to-August and November-to-December temp-only evidence, records the second proven boundary-month case, and keeps live/shared DB promotion plus runtime wiring outside the approved scope.
+Stage B11.1 designs a disabled-by-default CSI carry-forward runtime hook with proposed modes, call sites, helper refusal rules, provenance and duplicate contracts, rollback boundaries, and B11.2 criteria without implementing runtime wiring.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

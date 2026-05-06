@@ -116,9 +116,15 @@ August-only ingestion does not capture July-package CSI rows that canonicalize t
 Future carry-forward or adjacent-package reconciliation is required before claiming canonical monthly completeness for boundary-month CSI scope.
 This remains a policy/design boundary only; no runtime carry-forward logic or canonical predicate change is active through Stage B8.3.
 
+## Stage B11.1 Disabled-by-Default Carry-Forward Hook Design
+
+Stage B10 proves two temp-only CSI boundary-month cases: July 2025 package to August 2025 canonical month, and November 2025 package to December 2025 canonical month.
+B11 designs a disabled-by-default runtime hook boundary only.
+No live/shared DB promotion, runtime carry-forward wiring, source-discovery default change, runtime canonical predicate change, Streamlit write control, or DQ runtime wiring is approved by B11.1.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B8.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B11.1, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
