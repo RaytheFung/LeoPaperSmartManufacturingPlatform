@@ -147,9 +147,15 @@ Stage B12.2 adds the carry-forward audit workflow helper in `core/csi_carry_forw
 The helper defines reviewer status values, retention policy, sample audit/candidate/Gold-delta payload builders, caller-supplied SQLite insert helpers, workflow count validation, migration preflight checklist, live migration abort gates, and backup/rollback requirements.
 Sample inserts are validated only in in-memory SQLite tests. Live/shared DB migration remains blocked pending a separate approval stage with backup, checksum, dry-run SQL diff, reviewer acceptance, rollback procedure, and runtime smoke evidence.
 
+## Stage B12.3 Carry-Forward Audit Workflow Rehearsal
+
+Stage B12.3 adds a temp-only audit workflow rehearsal script in `scripts/rehearse_csi_carry_forward_audit_workflow.py`.
+The rehearsal creates an audit DB under `/tmp`, applies the B12.1 schema, inserts representative November 2025 -> December 2025 audit records, validates workflow counts, verifies backup checksum evidence, and validates a restored backup copy.
+No live DB migration has been run. Live/shared DB promotion remains a separate approval stage.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B12.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B12.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
