@@ -141,9 +141,15 @@ Stage B12.1 adds the carry-forward audit/provenance schema blueprint in `core/cs
 The blueprint defines non-destructive SQLite DDL for audit runs, candidate decisions, and Gold metric deltas, plus in-memory validation helpers and deterministic audit/candidate ID builders.
 No live DB migration has been run. Future live/shared DB promotion requires a separate migration, backup, rollback, and reviewer gate before any audit tables are created in promoted runtime state.
 
+## Stage B12.2 Carry-Forward Audit Workflow Preflight
+
+Stage B12.2 adds the carry-forward audit workflow helper in `core/csi_carry_forward_audit_workflow.py`.
+The helper defines reviewer status values, retention policy, sample audit/candidate/Gold-delta payload builders, caller-supplied SQLite insert helpers, workflow count validation, migration preflight checklist, live migration abort gates, and backup/rollback requirements.
+Sample inserts are validated only in in-memory SQLite tests. Live/shared DB migration remains blocked pending a separate approval stage with backup, checksum, dry-run SQL diff, reviewer acceptance, rollback procedure, and runtime smoke evidence.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B12.1, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B12.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 

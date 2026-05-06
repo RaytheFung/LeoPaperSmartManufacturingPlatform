@@ -60,6 +60,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB11_3_CSI_CARRY_FORWARD_INTEGRATION_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_3_CSI_CARRY_FORWARD_INTEGRATION_PREFLIGHT_REPORT.md)
 - [`POSTFYP_STAGEB11_CSI_CARRY_FORWARD_DISABLED_HOOK_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_CSI_CARRY_FORWARD_DISABLED_HOOK_CLOSEOUT_REPORT.md)
 - [`POSTFYP_STAGEB12_1_CSI_CARRY_FORWARD_AUDIT_SCHEMA_BLUEPRINT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB12_1_CSI_CARRY_FORWARD_AUDIT_SCHEMA_BLUEPRINT_REPORT.md)
+- [`POSTFYP_STAGEB12_2_CSI_CARRY_FORWARD_AUDIT_WORKFLOW_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB12_2_CSI_CARRY_FORWARD_AUDIT_WORKFLOW_PREFLIGHT_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -96,6 +97,7 @@ Stage B11.2 adds disabled-by-default carry-forward configuration scaffolding and
 Stage B11.3 adds a read-only runtime preflight adapter around the B11.2 guardrails, proving disabled mode is a no-op, preflight-only mode can route to planning, and temp-reconcile remains guarded without active runtime execution.
 Stage B11 closeout consolidates the disabled-hook design, config scaffolding, and read-only adapter evidence while keeping active runtime adoption and live/shared DB promotion outside the approved scope.
 Stage B12.1 adds a non-destructive carry-forward audit/provenance schema blueprint with in-memory validation only, keeping live DB migration, runtime wiring, and promoted audit-table creation outside the approved scope.
+Stage B12.2 adds a pure audit workflow preflight helper with reviewer statuses, retention policy, sample in-memory inserts, migration checklist, abort gates, and backup/rollback requirements while keeping live DB migration outside the approved scope.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)
