@@ -57,6 +57,8 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB10_CSI_CARRY_FORWARD_GENERALIZATION_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB10_CSI_CARRY_FORWARD_GENERALIZATION_CLOSEOUT_REPORT.md)
 - [`POSTFYP_STAGEB11_1_CSI_CARRY_FORWARD_RUNTIME_HOOK_DESIGN_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_1_CSI_CARRY_FORWARD_RUNTIME_HOOK_DESIGN_REPORT.md)
 - [`POSTFYP_STAGEB11_2_CSI_CARRY_FORWARD_CONFIG_SCAFFOLDING_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_2_CSI_CARRY_FORWARD_CONFIG_SCAFFOLDING_REPORT.md)
+- [`POSTFYP_STAGEB11_3_CSI_CARRY_FORWARD_INTEGRATION_PREFLIGHT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_3_CSI_CARRY_FORWARD_INTEGRATION_PREFLIGHT_REPORT.md)
+- [`POSTFYP_STAGEB11_CSI_CARRY_FORWARD_DISABLED_HOOK_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB11_CSI_CARRY_FORWARD_DISABLED_HOOK_CLOSEOUT_REPORT.md)
 
 These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B5.3.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
@@ -90,6 +92,8 @@ Stage B10.5 executes that approved November-to-December plan in a temp DB only: 
 Stage B10 closeout consolidates the July-to-August and November-to-December temp-only evidence, records the second proven boundary-month case, and keeps live/shared DB promotion plus runtime wiring outside the approved scope.
 Stage B11.1 designs a disabled-by-default CSI carry-forward runtime hook with proposed modes, call sites, helper refusal rules, provenance and duplicate contracts, rollback boundaries, and B11.2 criteria without implementing runtime wiring.
 Stage B11.2 adds disabled-by-default carry-forward configuration scaffolding and guardrail tests only, including mode validation, temp-DB path refusal, live-mode refusal, and the proven-boundary allowlist without wiring carry-forward into active runtime.
+Stage B11.3 adds a read-only runtime preflight adapter around the B11.2 guardrails, proving disabled mode is a no-op, preflight-only mode can route to planning, and temp-reconcile remains guarded without active runtime execution.
+Stage B11 closeout consolidates the disabled-hook design, config scaffolding, and read-only adapter evidence while keeping active runtime adoption and live/shared DB promotion outside the approved scope.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

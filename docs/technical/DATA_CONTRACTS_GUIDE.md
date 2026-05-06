@@ -129,9 +129,15 @@ The default mode is `disabled`; `preflight_only` and `temp_reconcile` are explic
 The proven-boundary allowlist is limited to July 2025 -> August 2025 and November 2025 -> December 2025 for future temp-only testing guardrails.
 No active ETL runtime, canonical materialization, live/shared DB behavior, source-discovery default, runtime canonical predicate, Streamlit control, or DQ runtime behavior is changed.
 
+## Stage B11.3 Carry-Forward Runtime Adapter Preflight
+
+Stage B11.3 adds a read-only runtime adapter in `core/csi_carry_forward_runtime_adapter.py`.
+Disabled mode is a no-op; `preflight_only` is allowed for read-only planning on proven boundaries; `temp_reconcile` remains guarded and is not executable through active runtime.
+No active ETL runtime, historical backfill, canonical materialization, live/shared DB behavior, source-discovery default, runtime canonical predicate, Streamlit control, or DQ runtime behavior is changed.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B11.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B11.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
