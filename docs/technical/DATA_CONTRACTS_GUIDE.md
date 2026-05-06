@@ -122,9 +122,16 @@ Stage B10 proves two temp-only CSI boundary-month cases: July 2025 package to Au
 B11 designs a disabled-by-default runtime hook boundary only.
 No live/shared DB promotion, runtime carry-forward wiring, source-discovery default change, runtime canonical predicate change, Streamlit write control, or DQ runtime wiring is approved by B11.1.
 
+## Stage B11.2 Carry-Forward Configuration Scaffolding
+
+Stage B11.2 adds disabled-by-default carry-forward configuration scaffolding in `core/csi_carry_forward_config.py`.
+The default mode is `disabled`; `preflight_only` and `temp_reconcile` are explicit non-default modes for future guarded work only.
+The proven-boundary allowlist is limited to July 2025 -> August 2025 and November 2025 -> December 2025 for future temp-only testing guardrails.
+No active ETL runtime, canonical materialization, live/shared DB behavior, source-discovery default, runtime canonical predicate, Streamlit control, or DQ runtime behavior is changed.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B11.1, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B11.2, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
