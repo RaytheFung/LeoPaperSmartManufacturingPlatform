@@ -135,9 +135,15 @@ Stage B11.3 adds a read-only runtime adapter in `core/csi_carry_forward_runtime_
 Disabled mode is a no-op; `preflight_only` is allowed for read-only planning on proven boundaries; `temp_reconcile` remains guarded and is not executable through active runtime.
 No active ETL runtime, historical backfill, canonical materialization, live/shared DB behavior, source-discovery default, runtime canonical predicate, Streamlit control, or DQ runtime behavior is changed.
 
+## Stage B12.1 Carry-Forward Audit Schema Blueprint
+
+Stage B12.1 adds the carry-forward audit/provenance schema blueprint in `core/csi_carry_forward_audit_schema.py`.
+The blueprint defines non-destructive SQLite DDL for audit runs, candidate decisions, and Gold metric deltas, plus in-memory validation helpers and deterministic audit/candidate ID builders.
+No live DB migration has been run. Future live/shared DB promotion requires a separate migration, backup, rollback, and reviewer gate before any audit tables are created in promoted runtime state.
+
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B11.3, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B12.1, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
