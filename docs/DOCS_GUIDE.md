@@ -13,7 +13,7 @@ Use:
 - `docs/LAUNCHING_TIPS.md` - safest app startup path on macOS
 - `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - authoritative current routed-runtime ownership map
 - `docs/technical/DATA_CONTRACTS_GUIDE.md` - Stage B data-contract foundation for source manifests and data-quality rule metadata
-- `docs/technical/REBUILD_DOCS_INDEX.md#post-fyp-product-refinement-reports` - post-FYP Stage A/B0/B1/B2 evidence reports
+- `docs/technical/REBUILD_DOCS_INDEX.md#post-fyp-product-refinement-reports` - post-FYP Stage A through B13.1 evidence reports
 - `docs/technical/TECHNICAL_OVERVIEW.md` - concise architecture map
 - `docs/technical/REBUILD_DOCS_INDEX.md` - full rebuild-doc reading order
 - `docs/UI_DESIGN_STANDARDS.md` and `docs/Design_Language_Guidelines.md` - UI conventions

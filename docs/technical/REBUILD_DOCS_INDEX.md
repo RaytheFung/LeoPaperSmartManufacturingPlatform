@@ -64,8 +64,9 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB12_3_CSI_CARRY_FORWARD_AUDIT_WORKFLOW_REHEARSAL_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB12_3_CSI_CARRY_FORWARD_AUDIT_WORKFLOW_REHEARSAL_REPORT.md)
 - [`POSTFYP_STAGEB12_CSI_CARRY_FORWARD_AUDIT_SCHEMA_CLOSEOUT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB12_CSI_CARRY_FORWARD_AUDIT_SCHEMA_CLOSEOUT_REPORT.md)
 - [`POSTFYP_STAGEB13_TRIAL_READINESS_DB_MIGRATION_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB13_TRIAL_READINESS_DB_MIGRATION_DECISION_REPORT.md)
+- [`POSTFYP_STAGEB13_1_FACTORY_DEPLOYMENT_ALIGNMENT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB13_1_FACTORY_DEPLOYMENT_ALIGNMENT_REPORT.md)
 
-These reports backfill and extend the post-FYP product-hardening evidence ledger for Stage A through Stage B13.
+These reports backfill and extend the post-FYP factory-deployment hardening evidence ledger for Stage A through Stage B13.1.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
 They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
 Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
@@ -103,7 +104,8 @@ Stage B12.1 adds a non-destructive carry-forward audit/provenance schema bluepri
 Stage B12.2 adds a pure audit workflow preflight helper with reviewer statuses, retention policy, sample in-memory inserts, migration checklist, abort gates, and backup/rollback requirements while keeping live DB migration outside the approved scope.
 Stage B12.3 runs the audit workflow against a temp DB under `/tmp`, validates schema/count/backup/restore evidence, and keeps live DB migration outside the approved scope.
 Stage B12 closeout consolidates the schema blueprint, workflow preflight, and temp-only rehearsal evidence while leaving active runtime adoption and live/shared DB migration unimplemented.
-Stage B13 decides that no live/shared DB migration and no runtime carry-forward adoption are required before the first controlled refined product trial; carry-forward remains disabled-by-default, audit schema remains blueprint/preflight only, and Stage C should move to active-vs-legacy cleanup plus trial packaging.
+Stage B13 decides that no live/shared DB migration and no runtime carry-forward adoption are approved while the project enters controlled factory deployment pilot readiness; carry-forward remains disabled-by-default, audit schema remains blueprint/preflight only, the local runtime DB remains a safe rehearsal boundary, and Stage C should move to production-readiness cleanup, app smoke, deployment hygiene, and operational checklist work.
+Stage B13.1 corrects the objective to Factory Production Deployment, clarifies that live/shared DB migration remains gated rather than abandoned, and reframes Stage C as production-readiness repo simplification plus deployment hygiene rather than trial packaging.
 
 ## Static Design Docs
 - [`REBUILD_INTENT_AND_SYSTEM_SPEC.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/REBUILD_INTENT_AND_SYSTEM_SPEC.md)

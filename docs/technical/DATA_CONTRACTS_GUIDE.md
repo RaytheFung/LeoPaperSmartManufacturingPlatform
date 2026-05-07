@@ -153,16 +153,23 @@ Stage B12.3 adds a temp-only audit workflow rehearsal script in `scripts/rehears
 The rehearsal creates an audit DB under `/tmp`, applies the B12.1 schema, inserts representative November 2025 -> December 2025 audit records, validates workflow counts, verifies backup checksum evidence, and validates a restored backup copy.
 No live DB migration has been run. Live/shared DB promotion remains a separate approval stage.
 
-## Stage B13 Trial Readiness DB Migration Decision
+## Stage B13 Factory Deployment DB Migration Decision
 
-Stage B13 defers live/shared DB migration before the first controlled refined product trial.
-The controlled trial should use the local runtime DB boundary and documented temp-only evidence rather than promoting a temp DB or creating live audit tables.
+Stage B13 defers live/shared DB migration while the project enters controlled factory deployment pilot readiness.
+The local runtime DB is a safe rehearsal and review boundary, not the final deployment state.
 CSI carry-forward remains disabled-by-default and should be presented as validated governance/preflight capability, not active runtime behavior.
-The next approved boundary is Stage C active-vs-legacy cleanup and trial packaging.
+Live/shared DB migration remains gated, not abandoned; it requires a later production-grade migration gate with backup, checksum, rollback, traceability, Gold-delta, app-smoke, reviewer-acceptance, and abort-criteria evidence.
+The next approved boundary is Stage C production-readiness cleanup, app smoke, deployment hygiene, and operational checklist work.
+
+## Stage B13.1 Factory Deployment Alignment Correction
+
+Stage B13.1 corrects the objective to Factory Production Deployment.
+It confirms that B5-B12 remain valid governance and temp-only safety evidence for factory deployment planning, while live/shared DB migration, runtime carry-forward adoption, and production audit insertion remain future gated decisions.
+Stage C should now be read as production-readiness repo simplification, deployment hygiene, app smoke, and operational checklist preparation, not local trial packaging.
 
 ## Data-Quality Rules Boundary
 
-The data-quality rules file documents rule intent and identifiers only. Through Stage B13, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
+The data-quality rules file documents rule intent and identifiers only. Through Stage B13.1, these rules are still not wired into `core/silver_normalizer.py` or `core/canonical_materializer.py`; current runtime behavior remains unchanged.
 
 Future hardening stages can use this file as the source of truth for anomaly exclusion, partial-meter flags, unresolved quarantine IDs, and quantity-overlay audit categories.
 
