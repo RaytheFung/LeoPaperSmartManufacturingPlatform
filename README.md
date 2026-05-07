@@ -1,36 +1,50 @@
-# Smart Manufacturing ETL + ML Platform
+# Smart Manufacturing Analytics Platform
 
-Streamlit app for monthly manufacturing ETL, unified-view generation, maintenance analysis, ML-assisted efficiency prediction, and optimization insights.
+Streamlit application for monthly manufacturing ETL, canonical operations review, energy analysis, maintenance evidence, ML-assisted efficiency prediction, and operational decision support.
+
+## Current Direction
+
+This repository is being hardened for controlled factory deployment pilot readiness with production-grade safety gates.
+
+The current state is not a completed production launch. Live/shared DB migration, promoted DB writes, runtime carry-forward adoption, and model artifact promotion remain gated future work. The local runtime database is a rehearsal and review boundary until a later production migration gate approves backup, checksum, rollback, app smoke, reviewer acceptance, and abort criteria.
 
 ## Current Working Set
 
 Primary runtime files:
-- `app.py` - Streamlit entry point
-- `modules/` - page modules used by the app
-- `core/` - ETL, ML, maintenance, and UI logic
-- `CURRENT_REBUILD_STATUS.md` - current rebuild ledger and recommended next step
-- `manufacturing_data.db` - local SQLite data store used by the app; kept out of GitHub because the active DB is too large for normal Git/Git LFS hosting
-- `models/` - trained model and preprocessing bundle
-- `data/` - current sample input files used by the lightweight June demo path
-- `source_data/2025_jan_jun_initial/` - raw historical Jan-Jun 2025 source files used by batch ETL
-- `source_data/2025_jul_2026_feb_collected/` - raw Jul 2025-Feb 2026 extension source package, with grouped energy files through Mar 2026
-- `etl_outputs/` - generated ETL reports, mappings, summaries, and cache files; ignored except for its guide/placeholder
-- `scripts/bootstrap_py311_and_run.sh` - recommended launcher on macOS
-- `scripts/process_jan_to_june_2025.py` - batch ETL rebuild for Jan-Jun 2025
-- `project_context.md` - current architecture/status note
+- `app.py` - Streamlit entry point.
+- `modules/` - routed page modules used by the app.
+- `core/` - ETL, canonical readers/materializers, ML, maintenance, runtime-mode, and support logic.
+- `config/source_manifest.v1.json` - accepted source-scope and source-discovery contract.
+- `config/data_quality_rules.v1.json` - data-quality rule metadata; not active runtime enforcement.
+- `manufacturing_data.db` - local SQLite runtime data store used by the app; ignored by Git and never staged, committed, or pushed.
+- `models/production_efficiency_model.pkl` and `models/production_preprocessor.pkl` - active model/preprocessor artifacts with provenance manifests.
+- `source_data/` - source truth for accepted historical packages.
+- `etl_outputs/` - generated ETL reports, mappings, summaries, and cache files; ignored except for `ETL_OUTPUTS_GUIDE.md` and `.gitkeep`.
+- `scripts/bootstrap_py311_and_run.sh` - recommended launcher on macOS.
+- `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - authoritative routed-runtime ownership map.
+- `docs/technical/DATA_CONTRACTS_GUIDE.md` - source, data-quality, local DB, and carry-forward boundary guide.
+- `docs/technical/REBUILD_DOCS_INDEX.md` - technical evidence ledger and reading order.
 
-Generated or local-only files:
-- `.conda311/`, `.miniforge/`, `.venv/` - local Python environments
-- `.streamlit/server.log`, `.streamlit/server.pid` - runtime files
-- `manufacturing_data.db`, `*.db`, `*.sqlite*` - local runtime database artifacts; rebuild or transfer separately when a full runtime snapshot is needed
-- generated `etl_outputs/*` files - recreated by ETL scripts when needed
-- local diagnostic/output holding folder: `/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform_repo_holding_20260404/local_runtime_clutter/`
-  - `artifacts/` - Task-run SQLite backups, working copies, probes, and diagnostics moved outside the repo
-  - `backups/` - historical SQLite rollback/backup files moved outside the repo
-- `__pycache__/`, `.DS_Store`, `~$*.xlsx` - disposable noise
+Historical or review-support files:
+- `project_context.md` is historical context only, not current deployment truth.
+- `data/` contains older sample inputs and should not be treated as the production source-of-truth folder.
+- Older `docs/technical/TASK*` reports remain evidence records, not current operator runbooks.
 
-Historical or project-artifact docs have been moved outside the repo into:
-- `/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform_repo_holding_20260404/`
+## Safety Boundaries
+
+- Do not stage or commit `manufacturing_data.db`, `*.db`, `*.sqlite`, or `*.sqlite3`.
+- Do not stage raw Excel source changes unless a future source-data governance task explicitly approves them.
+- Do not stage generated `etl_outputs` files.
+- Do not retrain or promote ML artifacts unless a separate model-promotion gate approves it.
+- Do not treat carry-forward as active ETL runtime behavior. CSI carry-forward scaffolding is disabled-by-default and remains governance/preflight evidence until a separate adoption gate approves runtime wiring.
+- Do not treat live/shared DB migration as abandoned. It remains gated and must pass production-grade migration, backup, rollback, traceability, app-smoke, reviewer-acceptance, and abort-criteria checks before any promoted DB write.
+- Do not change source-discovery default policy or runtime canonical predicates without an explicit approved stage.
+
+## Source And Generated Data
+
+- `source_data/2025_jan_jun_initial/` contains accepted January 2025 through June 2025 source scope.
+- `source_data/2025_jul_2026_feb_collected/` contains accepted July 2025 through February 2026 extension source scope. Grouped energy files can contain March 2026 rows, but March 2026 remains blocked/out of canonical scope unless a later task reopens that boundary.
+- `etl_outputs/` is generated output, not source truth. Generated reports, cache files, and mappings should be recreated by controlled ETL runs rather than committed as product state.
 
 ## Run The App
 
@@ -46,7 +60,7 @@ Then open:
 http://localhost:8502
 ```
 
-Alternative if the local Python 3.11 env already exists:
+Alternative if the local Python 3.11 environment already exists:
 
 ```bash
 .conda311/bin/streamlit run app.py --server.port 8502 --server.address 0.0.0.0 --server.headless true
@@ -58,51 +72,30 @@ Stop the app:
 pkill -f "streamlit run app.py"
 ```
 
-## Verify Core Workflows
+## Deployment-Readiness Checks
 
-Rebuild Jan-Jun ETL artifacts:
-
-```bash
-python3 scripts/process_jan_to_june_2025.py
-```
-
-Retrain the model:
+Use these checks for lightweight branch hygiene and runtime-surface confidence. They do not run ETL, historical backfill, canonical materialization, live DB migration, or model promotion.
 
 ```bash
-python3 core/ml_trainer.py
+python3.11 -m compileall core modules scripts tests
+python3.11 -m unittest tests.test_runtime_paths tests.test_app_route_contract tests.test_runtime_mode tests.test_runtime_capabilities
+python3.11 -m unittest tests.test_source_discovery_default_switch tests.test_csi_carry_forward_config tests.test_csi_carry_forward_runtime_adapter
+python3.11 scripts/compare_source_discovery_modes.py
+python3.11 scripts/compare_source_discovery_modes.py --json
 ```
 
-Smoke-test inference:
+Manual checks under `tests/manual_checks/` are not production deployment scripts. Some may query or mutate the local DB. Read `tests/manual_checks/README.md` before running them.
 
-```bash
-python3 core/ml_predictor.py
-```
+## Docs Navigation
 
-Check unified-view coverage:
-
-```bash
-sqlite3 manufacturing_data.db "SELECT month_year, COUNT(*), AVG(kwh_per_unit) FROM unified_view GROUP BY month_year;"
-```
-
-## Tests
-
-Automated unit tests currently worth keeping in the main test path:
-
-```bash
-python3 -m unittest tests.test_etl_modules tests.test_euvg_stage3
-```
-
-Manual verification scripts live under `tests/manual_checks/`.
+- `docs/DOCS_GUIDE.md` - production-readiness navigation guide.
+- `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - current routed-runtime ownership map.
+- `docs/technical/DATA_CONTRACTS_GUIDE.md` - source manifest, data-quality metadata, local DB, and carry-forward boundaries.
+- `docs/technical/REBUILD_DOCS_INDEX.md` - Stage A/B/C evidence ledger.
+- `docs/LAUNCHING_TIPS.md` - local app launch tips.
+- `docs/technical/POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md` and later Stage C reports - production-readiness cleanup evidence.
 
 ## Notes
 
-- `project_context.md` is the best high-level description of the current system.
-- `docs/DOCS_GUIDE.md` is the docs-folder guide only; use it when you want the shortest path to current documentation.
-- `docs/technical/REBUILD_DOCS_INDEX.md` groups rebuild docs into static design docs, task reports, and historical handoff docs.
-- Folder-specific guides use explicit names to stay readable in the file explorer:
-  - `source_data/SOURCE_DATA_GUIDE.md`
-  - `source_data/2025_jan_jun_initial/INITIAL_SOURCE_SCOPE.md`
-  - `source_data/2025_jul_2026_feb_collected/EXTENDED_SOURCE_SCOPE.md`
-  - `etl_outputs/ETL_OUTPUTS_GUIDE.md`
-  - `tests/TESTS_GUIDE.md`
 - `run_app.sh` exists, but the Python 3.11 bootstrap path is the safer default on macOS.
+- If current docs conflict, trust `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md`, `docs/technical/DATA_CONTRACTS_GUIDE.md`, the live code under `app.py`, `core/`, `modules/`, and the latest Stage C report.

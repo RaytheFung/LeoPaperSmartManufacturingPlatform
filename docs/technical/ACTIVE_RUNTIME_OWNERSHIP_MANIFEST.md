@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This file is the authoritative current-source map for the defended runtime after Task11 reconciliation.
+This file is the authoritative current-source map for the defended runtime as the repo enters Stage C production-readiness cleanup.
+
+It describes current routed runtime ownership. It does not approve live/shared DB migration, promoted DB writes, runtime carry-forward adoption, model artifact promotion, or experimental prototype elevation into defended production execution.
 
 Use trust order:
 
@@ -13,6 +15,14 @@ Use trust order:
 5. `README.md` for launch/runtime commands
 
 `project_context.md` is retained as broad historical architecture context only. It is not the live routed-runtime ledger.
+
+## Stage C Production-Readiness Boundary
+
+- The project target is controlled factory deployment pilot readiness with production-grade safety gates.
+- `manufacturing_data.db` remains local-only runtime state and must stay out of Git.
+- Source-discovery policy and runtime canonical predicates remain unchanged unless a later approved stage explicitly changes them.
+- CSI carry-forward scaffolding remains disabled-by-default. The current runtime does not execute carry-forward reconciliation through active ETL, materialization, Streamlit, DQ, ML, or app behavior.
+- Live/shared DB migration remains gated, not abandoned. It requires a separate migration gate with backup, checksum, rollback, traceability, app smoke, reviewer acceptance, and abort criteria.
 
 ## Defended Core Runtime Ownership
 
@@ -51,6 +61,7 @@ Use trust order:
   - route shell: `app.py` -> `modules/experimental_intelligence_lab_module.py`
   - prototypes: `core/experimental_scheduling.py`, `core/experimental_maintenance_prototype.py`
   - runtime truth: internal-landing experimental flagship lane, read-only, non-defended for production claims, separate from defended core
+  - production boundary: not a defended production execution engine, not a live scheduler, and not a predictive-maintenance production claim
   - scheduling provenance: default queue is real-seeded synthetic unless a narrow real-input pilot queue upload is supplied
   - maintenance provenance: weak-label model or fallback evidence score only; late-anchor future-event observation remains bounded by stored maintenance history
 
@@ -69,6 +80,13 @@ Use trust order:
   - `core/experimental_scheduling.py` now resolves the same repo-local live model/preprocessor/provenance paths explicitly when no override predictor is passed
 
 Archive folders under `models/task4g_artifacts/` and `models/task4l_artifacts/` are history/provenance support only. They are not the live runtime attachment set for the current defended bundle.
+
+## Carry-Forward Ownership Boundary
+
+- `core/csi_carry_forward_config.py`, `core/csi_carry_forward_runtime_adapter.py`, `core/csi_carry_forward_audit_schema.py`, and `core/csi_carry_forward_audit_workflow.py` are governance/preflight scaffolding.
+- Disabled mode remains the default runtime stance.
+- `preflight_only` and `temp_reconcile` concepts remain guarded future-work modes, not active production runtime behavior.
+- No active routed ETL, materialization, Streamlit, DQ, ML, or app page currently executes CSI carry-forward reconciliation.
 
 ## Dormant / Legacy / Non-Authoritative Files Inside The Repo
 

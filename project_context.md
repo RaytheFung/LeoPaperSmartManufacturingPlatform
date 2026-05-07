@@ -1,5 +1,9 @@
 # Project Context – Smart Manufacturing ETL + ML Platform
 
+> Historical context only.
+>
+> This file is not current deployment truth for Stage C factory production-readiness work. Use `README.md`, `docs/DOCS_GUIDE.md`, `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md`, `docs/technical/DATA_CONTRACTS_GUIDE.md`, and the latest Stage C report for current runtime and deployment boundaries.
+
 _Last updated: 2026-03-13 (post-presentation cleanup and Stage 3 follow-through)_
 
 ## Runtime Authority Note
