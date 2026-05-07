@@ -31,6 +31,12 @@ The objective is controlled factory deployment pilot readiness with production-g
 
 This means the branch should be ready for operational review, app-shell smoke, route-contract review, and explicit owner acceptance. It does not mean the system is production-launched or that local runtime state is final factory deployment state.
 
+## C6 status note
+
+Stage C6 marks this handoff pack ready for owner review with the decision: provisional GO for factory pilot owner review; NO-GO for production deployment/live DB migration.
+
+Sign-off placeholders remain unfilled because no actual operational owner, technical reviewer, DB owner, or rollback owner decision evidence has been provided. Production deployment remains blocked until future owner-acceptance, migration, backup/checksum/rollback, and operational gates pass.
+
 ## What is ready for pilot review
 
 - Stage C1 identified active runtime, source, generated output, model artifact, legacy, and docs surfaces.
