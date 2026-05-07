@@ -66,8 +66,13 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEB13_TRIAL_READINESS_DB_MIGRATION_DECISION_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB13_TRIAL_READINESS_DB_MIGRATION_DECISION_REPORT.md)
 - [`POSTFYP_STAGEB13_1_FACTORY_DEPLOYMENT_ALIGNMENT_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEB13_1_FACTORY_DEPLOYMENT_ALIGNMENT_REPORT.md)
 
-These reports backfill and extend the post-FYP factory-deployment hardening evidence ledger for Stage A through Stage B13.1.
-Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B work.
+## Post-FYP Stage C Production-Readiness Reports
+- [`POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md)
+
+`POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md` is the inventory-only Stage C entry report for factory deployment readiness. It classifies active runtime files, deployment-critical docs, technical ledgers, tests, source data, generated outputs, model artifacts, legacy candidates, quarantine candidates, history-only files, and unclear files requiring review before any cleanup, archive, quarantine, runtime change, DB write, ETL run, or model artifact promotion.
+
+The Stage A through Stage B13.1 reports backfill and extend the post-FYP factory-deployment hardening evidence ledger through the Stage C entry gate.
+Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B/C work.
 They are evidence records for baseline triage, safe-tree setup, data-contract foundation, source-discovery equivalence, and optional ETL resolver integration; they do not claim active ETL, materialization, ML, optimization, or runtime behavior changes beyond the specific stages they document.
 Stage B3 keeps legacy source discovery as the default while adding optional `manifest` and `compare` modes for controlled follow-up evidence.
 Stage B4.1 audits source-discovery caller impact and governance before any default switch or UI exposure is considered.
