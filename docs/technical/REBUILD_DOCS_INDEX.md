@@ -21,6 +21,13 @@ Use rebuild memory in three primary categories, plus one support-artifact bucket
 
 Use this set together with the living status file when re-entering the repo after cleanup or before a stage transition. `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` is the authoritative routed-runtime ownership map; `project_context.md` is retained as broader historical architecture context only. The technical docs intentionally remain flat under `docs/technical/` so the long-lived absolute links inside reports do not break.
 
+## Operations Runbooks And Checklists
+- [`FACTORY_DEPLOYMENT_RUNBOOK.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_DEPLOYMENT_RUNBOOK.md)
+- [`LIVE_DB_MIGRATION_GATE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md)
+- [`FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md)
+
+Use these operations docs for controlled factory deployment pilot readiness. They are runbooks and approval checklists, not evidence that production deployment or live/shared DB migration is complete.
+
 ## Final Stage Sync
 - [`FINAL_STAGE_SYNC_STATUS.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/FINAL_STAGE_SYNC_STATUS.md)
   This is the shared final-stage sync note for user/Codex/reviewer alignment, including the accepted baseline, externalized archival decisions, unresolved clutter, the ready-to-use `Task6 UI polish & demo freeze` prompt, and the pre-demo vs post-demo roadmap split.
@@ -70,10 +77,12 @@ Use this set together with the living status file when re-entering the repo afte
 - [`POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md)
 - [`POSTFYP_STAGEC2_PRODUCTION_DOCS_NAVIGATION_CLEANUP_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEC2_PRODUCTION_DOCS_NAVIGATION_CLEANUP_REPORT.md)
 - [`POSTFYP_STAGEC3_APP_LAUNCH_ROUTE_SMOKE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEC3_APP_LAUNCH_ROUTE_SMOKE_REPORT.md)
+- [`POSTFYP_STAGEC4_DEPLOYMENT_RUNBOOK_MIGRATION_GATE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGEC4_DEPLOYMENT_RUNBOOK_MIGRATION_GATE_REPORT.md)
 
 `POSTFYP_STAGEC1_PRODUCTION_READINESS_INVENTORY_REPORT.md` is the inventory-only Stage C entry report for factory deployment readiness. It classifies active runtime files, deployment-critical docs, technical ledgers, tests, source data, generated outputs, model artifacts, legacy candidates, quarantine candidates, history-only files, and unclear files requiring review before any cleanup, archive, quarantine, runtime change, DB write, ETL run, or model artifact promotion.
 `POSTFYP_STAGEC2_PRODUCTION_DOCS_NAVIGATION_CLEANUP_REPORT.md` is the docs/navigation cleanup and legacy-warning-boundary report. It updates operator-facing docs for factory deployment pilot readiness, adds manual-check and historical-context warnings, records read-only dependency proof for future quarantine candidates, and keeps runtime code, DB state, source policy, carry-forward behavior, and model artifacts unchanged.
 `POSTFYP_STAGEC3_APP_LAUNCH_ROUTE_SMOKE_REPORT.md` is the app launch and routed smoke evidence report. It records the route/runtime contract tests, `/tmp`-only Streamlit bootstrap smoke in `demo_readonly`, HTTP/log/process evidence, DB/artifact safety scans, and the factory deployment pilot checklist while keeping runtime behavior unchanged.
+`POSTFYP_STAGEC4_DEPLOYMENT_RUNBOOK_MIGRATION_GATE_REPORT.md` is the deployment runbook and migration-gate preparation report. It adds operations runbooks/checklists plus a read-only JSON preflight helper while keeping runtime behavior, DB state, source policy, carry-forward behavior, and model artifacts unchanged.
 
 The Stage A through Stage B13.1 reports backfill and extend the post-FYP factory-deployment hardening evidence ledger through the Stage C entry gate.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B/C work.

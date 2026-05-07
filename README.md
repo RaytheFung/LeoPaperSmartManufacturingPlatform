@@ -77,6 +77,7 @@ pkill -f "streamlit run app.py"
 Use these checks for lightweight branch hygiene and runtime-surface confidence. They do not run ETL, historical backfill, canonical materialization, live DB migration, or model promotion.
 
 ```bash
+python3.11 scripts/check_factory_deployment_readiness.py
 python3.11 -m compileall core modules scripts tests
 python3.11 -m unittest tests.test_runtime_paths tests.test_app_route_contract tests.test_runtime_mode tests.test_runtime_capabilities
 python3.11 -m unittest tests.test_source_discovery_default_switch tests.test_csi_carry_forward_config tests.test_csi_carry_forward_runtime_adapter
@@ -89,6 +90,9 @@ Manual checks under `tests/manual_checks/` are not production deployment scripts
 ## Docs Navigation
 
 - `docs/DOCS_GUIDE.md` - production-readiness navigation guide.
+- `docs/operations/FACTORY_DEPLOYMENT_RUNBOOK.md` - controlled factory deployment pilot runbook.
+- `docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md` - approval checklist for any future live/shared DB migration.
+- `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md` - operator/reviewer pilot-readiness sign-off template.
 - `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - current routed-runtime ownership map.
 - `docs/technical/DATA_CONTRACTS_GUIDE.md` - source manifest, data-quality metadata, local DB, and carry-forward boundaries.
 - `docs/technical/REBUILD_DOCS_INDEX.md` - Stage A/B/C evidence ledger.
