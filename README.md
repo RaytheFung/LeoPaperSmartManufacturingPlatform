@@ -91,6 +91,7 @@ Manual checks under `tests/manual_checks/` are not production deployment scripts
 
 - `docs/DOCS_GUIDE.md` - production-readiness navigation guide.
 - `docs/operations/FACTORY_DEPLOYMENT_RUNBOOK.md` - controlled factory deployment pilot runbook.
+- `docs/operations/FACTORY_PILOT_HANDOFF_PACK.md` - owner/reviewer handoff pack for controlled factory pilot readiness.
 - `docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md` - approval checklist for any future live/shared DB migration.
 - `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md` - operator/reviewer pilot-readiness sign-off template.
 - `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - current routed-runtime ownership map.

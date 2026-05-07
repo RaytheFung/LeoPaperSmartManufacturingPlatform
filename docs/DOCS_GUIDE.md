@@ -7,6 +7,7 @@ This is the production-readiness navigation guide for the documentation folder. 
 - `README.md` - app launch, local DB boundary, source/output folders, and deployment-readiness checks.
 - `docs/LAUNCHING_TIPS.md` - safest macOS startup path for Streamlit on port `8502`.
 - `docs/operations/FACTORY_DEPLOYMENT_RUNBOOK.md` - controlled factory deployment pilot runbook.
+- `docs/operations/FACTORY_PILOT_HANDOFF_PACK.md` - owner/reviewer handoff pack for controlled factory pilot readiness.
 - `docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md` - approval checklist for future live/shared DB migration.
 - `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md` - operator/reviewer pilot-readiness sign-off template.
 - `docs/technical/ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` - authoritative current routed-runtime ownership map.
