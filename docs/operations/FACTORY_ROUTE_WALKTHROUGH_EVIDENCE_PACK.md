@@ -163,3 +163,8 @@ Current D2 conclusion: route walkthrough evidence pack prepared; owner walkthrou
 
 This pack is ready for controlled operator/reviewer use, but it does not prove the routes have been manually accepted. Production deployment remains blocked. Live/shared DB migration remains blocked. Runtime carry-forward adoption remains blocked. Model retraining and artifact promotion remain blocked.
 
+## D3 internal rehearsal note
+
+Stage D3 adds `docs/operations/FACTORY_OWNER_REVIEW_CAPTURE_TEMPLATE.md` for owner/reviewer decision capture after an internal route walkthrough rehearsal.
+
+D3 internal rehearsal status exists for readiness, route contracts, `/tmp` Streamlit bootstrap, runtime visibility probes, and static route-module import checks. Route observed statuses remain `pending owner walkthrough` until real owner/reviewer visual confirmation and initials are provided.
