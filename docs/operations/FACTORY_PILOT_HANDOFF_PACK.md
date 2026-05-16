@@ -43,6 +43,12 @@ Stage D2 adds `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md` as th
 
 Route walkthrough evidence remains pending until a real owner/reviewer walkthrough records observations, initials, branch, commit, runtime mode, no-click/no-upload confirmations, and DB/artifact safety checks. Sign-off placeholders remain unfilled.
 
+## D4 external owner-review handoff note
+
+Stage D4 adds `docs/operations/FACTORY_OWNER_REVIEW_HANDOFF_CLOSEOUT.md` as the external owner-review handoff gate.
+
+Owner sign-off remains pending. Production deployment and live/shared DB migration remain blocked until real owner/reviewer evidence and separate migration gates are provided.
+
 ## What is ready for pilot review
 
 - Stage C1 identified active runtime, source, generated output, model artifact, legacy, and docs surfaces.
@@ -188,6 +194,7 @@ The migration gate must include backup, checksum, dry-run SQL diff, row-count ba
 - `docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md`
 - `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md`
 - `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md`
+- `docs/operations/FACTORY_OWNER_REVIEW_HANDOFF_CLOSEOUT.md`
 
 ## Go/no-go checklist
 

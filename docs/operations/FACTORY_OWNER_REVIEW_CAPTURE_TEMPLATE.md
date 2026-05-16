@@ -179,3 +179,8 @@ Declare no-go and escalate if:
 | runtime carry-forward adoption decision | NO-GO until separate adoption gate approval |
 | final notes | TBD |
 
+## D4 external owner-review handoff note
+
+Stage D4 identifies this file as the live capture template for external owner review.
+
+Results must be returned through this template or equivalent typed owner/reviewer evidence before D5 can record owner acceptance. All actual review, sign-off, risk acceptance, rejected-risk, and final decision fields remain `TBD` until real owner/reviewer evidence is provided.
