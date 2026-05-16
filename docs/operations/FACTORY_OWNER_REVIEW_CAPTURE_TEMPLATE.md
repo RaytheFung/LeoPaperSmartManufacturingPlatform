@@ -184,3 +184,9 @@ Declare no-go and escalate if:
 Stage D4 identifies this file as the live capture template for external owner review.
 
 Results must be returned through this template or equivalent typed owner/reviewer evidence before D5 can record owner acceptance. All actual review, sign-off, risk acceptance, rejected-risk, and final decision fields remain `TBD` until real owner/reviewer evidence is provided.
+
+## D5 evidence intake note
+
+Stage D5 adds `docs/operations/FACTORY_OWNER_REVIEW_EXECUTION_PROTOCOL.md` and `docs/operations/FACTORY_OWNER_REVIEW_EVIDENCE_INTAKE_CHECKLIST.md`.
+
+Use those documents to execute the external review and check returned evidence completeness. D6 should only record owner acceptance if actual evidence is returned and passes the intake checklist. All sign-off fields in this template remain `TBD` until then.

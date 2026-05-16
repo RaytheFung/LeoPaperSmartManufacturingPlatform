@@ -49,6 +49,12 @@ Stage D4 adds `docs/operations/FACTORY_OWNER_REVIEW_HANDOFF_CLOSEOUT.md` as the 
 
 Owner sign-off remains pending. Production deployment and live/shared DB migration remain blocked until real owner/reviewer evidence and separate migration gates are provided.
 
+## D5 owner-review execution and intake note
+
+Stage D5 adds `docs/operations/FACTORY_OWNER_REVIEW_EXECUTION_PROTOCOL.md` and `docs/operations/FACTORY_OWNER_REVIEW_EVIDENCE_INTAKE_CHECKLIST.md`.
+
+D6 should only record owner acceptance if actual owner/reviewer evidence is returned and passes the D5 intake checklist. Sign-off placeholders remain unfilled until then.
+
 ## What is ready for pilot review
 
 - Stage C1 identified active runtime, source, generated output, model artifact, legacy, and docs surfaces.
@@ -195,6 +201,8 @@ The migration gate must include backup, checksum, dry-run SQL diff, row-count ba
 - `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md`
 - `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md`
 - `docs/operations/FACTORY_OWNER_REVIEW_HANDOFF_CLOSEOUT.md`
+- `docs/operations/FACTORY_OWNER_REVIEW_EXECUTION_PROTOCOL.md`
+- `docs/operations/FACTORY_OWNER_REVIEW_EVIDENCE_INTAKE_CHECKLIST.md`
 
 ## Go/no-go checklist
 

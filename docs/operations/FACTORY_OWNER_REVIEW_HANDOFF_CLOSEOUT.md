@@ -37,6 +37,8 @@ This objective is not production deployment approval. It is an external review g
 
 Owner/reviewer package:
 
+- `docs/operations/FACTORY_OWNER_REVIEW_EXECUTION_PROTOCOL.md`
+- `docs/operations/FACTORY_OWNER_REVIEW_EVIDENCE_INTAKE_CHECKLIST.md`
 - `docs/operations/FACTORY_OWNER_REVIEW_CAPTURE_TEMPLATE.md`
 - `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md`
 - `docs/operations/FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md`
@@ -54,6 +56,7 @@ Internal evidence basis:
 - D2: route walkthrough evidence pack with all route statuses pending owner walkthrough.
 - D3: internal route rehearsal, `/tmp` Streamlit bootstrap proof, route contract refresh, and owner-review capture template.
 - D4: external owner-review pending closeout and handoff gate.
+- D5: external owner-review execution protocol and evidence intake checklist.
 
 ## Required owner / reviewer roles
 
@@ -174,6 +177,8 @@ Return review results by providing:
 
 D5 may record owner acceptance only after real review evidence is returned.
 
+D6 should only record owner acceptance if the returned evidence is complete under `docs/operations/FACTORY_OWNER_REVIEW_EVIDENCE_INTAKE_CHECKLIST.md`.
+
 ## No-go escalation conditions
 
 Declare no-go and escalate if:
@@ -191,4 +196,3 @@ Declare no-go and escalate if:
 - production deployment is requested before migration and owner gates pass;
 - live/shared DB migration is requested without migration gate approval;
 - runtime carry-forward adoption is requested without an adoption gate.
-
