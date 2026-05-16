@@ -37,6 +37,12 @@ Stage C6 marks this handoff pack ready for owner review with the decision: provi
 
 Sign-off placeholders remain unfilled because no actual operational owner, technical reviewer, DB owner, or rollback owner decision evidence has been provided. Production deployment remains blocked until future owner-acceptance, migration, backup/checksum/rollback, and operational gates pass.
 
+## D2 route walkthrough evidence note
+
+Stage D2 adds `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md` as the controlled route-level operator/reviewer evidence capture pack.
+
+Route walkthrough evidence remains pending until a real owner/reviewer walkthrough records observations, initials, branch, commit, runtime mode, no-click/no-upload confirmations, and DB/artifact safety checks. Sign-off placeholders remain unfilled.
+
 ## What is ready for pilot review
 
 - Stage C1 identified active runtime, source, generated output, model artifact, legacy, and docs surfaces.
@@ -181,6 +187,7 @@ The migration gate must include backup, checksum, dry-run SQL diff, row-count ba
 - `docs/operations/FACTORY_DEPLOYMENT_RUNBOOK.md`
 - `docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md`
 - `docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md`
+- `docs/operations/FACTORY_ROUTE_WALKTHROUGH_EVIDENCE_PACK.md`
 
 ## Go/no-go checklist
 
