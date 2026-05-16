@@ -26,6 +26,7 @@ Use this set together with the living status file when re-entering the repo afte
 - [`FACTORY_PILOT_HANDOFF_PACK.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_PILOT_HANDOFF_PACK.md)
 - [`LIVE_DB_MIGRATION_GATE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/LIVE_DB_MIGRATION_GATE_CHECKLIST.md)
 - [`FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_PILOT_OPERATOR_ACCEPTANCE_CHECKLIST.md)
+- [`FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md)
 
 Use these operations docs for controlled factory deployment pilot readiness. They are runbooks and approval checklists, not evidence that production deployment or live/shared DB migration is complete.
 
@@ -90,6 +91,13 @@ Use these operations docs for controlled factory deployment pilot readiness. The
 `POSTFYP_STAGEC5_FACTORY_PILOT_HANDOFF_ACCEPTANCE_REPORT.md` is the factory pilot handoff and owner-acceptance report. It consolidates C1-C4 evidence into a handoff pack, go/no-go recommendation, owner acceptance requirements, accepted pilot risks, and blocked production risks while keeping runtime behavior, DB state, source policy, carry-forward behavior, and model artifacts unchanged.
 `POSTFYP_STAGEC_FACTORY_PILOT_READINESS_CLOSEOUT_REPORT.md` is the Stage C closeout report. It summarizes C1-C5, identifies what Stage C has and has not proven, records the current controlled factory pilot readiness state, and keeps production deployment, live/shared DB migration, and runtime carry-forward adoption blocked.
 `POSTFYP_STAGEC6_FACTORY_PILOT_GONOGO_DECISION_REPORT.md` is the C6 go/no-go decision report. It records the provisional GO for factory pilot owner review and NO-GO for production deployment/live DB migration while keeping owner sign-off placeholders unfilled until actual decisions are provided.
+
+## Post-FYP Stage D Factory Deployment Readiness Reports
+- [`POSTFYP_STAGED1_FACTORY_ROUTE_WORKFLOW_SMOKE_REPORT.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/technical/POSTFYP_STAGED1_FACTORY_ROUTE_WORKFLOW_SMOKE_REPORT.md)
+- [`FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md`](/Users/rayfung/Documents/VCC/LeoPaper/LeoPaperSmartManufacturingPlatform/docs/operations/FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md)
+
+`POSTFYP_STAGED1_FACTORY_ROUTE_WORKFLOW_SMOKE_REPORT.md` is the D1 route workflow smoke evidence report. It records the readiness preflight refresh, route contract refresh, `/tmp`-only Streamlit bootstrap smoke, route smoke matrix, honest skip rationale for automated route clicking, DB/artifact safety evidence, and recommended D2 manual operator walkthrough.
+`FACTORY_ROUTE_WORKFLOW_SMOKE_CHECKLIST.md` is the operator/reviewer checklist for controlled route-by-route observations. It keeps owner/reviewer initials as placeholders until actual sign-off evidence is provided.
 
 The Stage A through Stage B13.1 reports backfill and extend the post-FYP factory-deployment hardening evidence ledger through the Stage C entry gate.
 Read them after `CURRENT_REBUILD_STATUS.md` and `ACTIVE_RUNTIME_OWNERSHIP_MANIFEST.md` when continuing Stage B/C work.
